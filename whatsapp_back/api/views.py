@@ -1,12 +1,15 @@
+import requests, json
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-import requests
-import json
-from django.views.decorators.http import require_POST
 from rest_framework.views import APIView
+from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
-from .serializers import PhoneNumberSerializer
+from .serializers import (
+    PhoneNumberSerializer,
+    ExcelSerializer,
+    WhatsAppBulkMessageSerializer,
+)
 from .models import PhoneNumber
 from openpyxl import load_workbook
 from decouple import config
@@ -20,10 +23,18 @@ def index(request):
     return HttpResponse("OK")
 
 
+class PhoneNumberList(APIView):
+    def get(self, request, format=None):
+        phone_numbers = PhoneNumber.objects.all()
+        serializer = PhoneNumberSerializer(phone_numbers, many=True)
+        numbers = [item["number"] for item in serializer.data]
+        return Response(numbers, status=status.HTTP_200_OK)
+
+
 # numbers upload from excel
 class PhoneNumberUpload(APIView):
     def post(self, request, format=None):
-        serializer = PhoneNumberSerializer(data=request.data)
+        serializer = ExcelSerializer(data=request.data)
 
         if serializer.is_valid():
             excel_file = serializer.validated_data["excel_file"]
@@ -51,59 +62,17 @@ class PhoneNumberUpload(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-# sent individual message
-@csrf_exempt
-@require_POST
-def send_whatsapp_message(request):
-    try:
-        post_data = json.loads(request.body.decode("utf-8"))
-        to = post_data.get("name")
-        # print("Received 'to' parameter: ", to)
-
-        PhoneNumber.objects.get_or_create(number=to)
-
-        if not to:
-            return JsonResponse({"error": "Missing 'to' parameter"}, status=400)
-
-        data = {
-            "messaging_product": "whatsapp",
-            "recipient_type": "individual",
-            "to": to,
-            "type": "template",
-            "template": {"name": "developer_test", "language": {"code": "en"}},
-        }
-
-        url = "https://graph.facebook.com/v17.0/123004784227116/messages"
-        headers = {
-            "Authorization": "Bearer "
-            + bearer_token,  # Include the Bearer token in the headers
-            "Content-Type": "application/json",
-        }
-        # print(headers)
-
-        response = requests.post(url, headers=headers, json=data)
-        response_data = response.json()
-        return JsonResponse(response_data, status=response.status_code)
-
-    except json.JSONDecodeError:
-        return JsonResponse({"error": "Invalid JSON data"}, status=400)
-    except requests.exceptions.RequestException as e:
-        return JsonResponse({"error": str(e)}, status=500)
-
-
 # send bulk messages manually
-@csrf_exempt
-@require_POST
+# @csrf_exempt
+# @require_POST
+@api_view(["POST"])
 def send_whatsapp_bulk_messages(request):
     try:
-        post_data = json.loads(request.body.decode("utf-8"))
-        numbers = post_data.get("numbers")
+        serializer = WhatsAppBulkMessageSerializer(data=request.data)
 
-        if not numbers or not isinstance(numbers, list):
-            return JsonResponse(
-                {"error": "Missing or invalid 'numbers' parameter"}, status=400
-            )
-        results = []
+        if serializer.is_valid():
+            numbers = serializer.validated_data.get("numbers")
+            results = []
 
         for number in numbers:
             if number.startswith("0"):
@@ -155,8 +124,9 @@ def send_whatsapp_bulk_messages(request):
 
 
 # send bulk messages from addded names from database
-@csrf_exempt
-@require_POST
+# @csrf_exempt
+# @
+@api_view(["POST"])
 def send_whatsapp_model_bulk_messages(request):
     try:
         get_numbers = PhoneNumber.objects.values_list("number", flat=True)
@@ -294,3 +264,43 @@ def whatsapp_webhook(request):
 #             return HttpResponse(
 #                 "Invalid JSON data", content_type="text/plain", status=400
 #             )
+
+
+# sent individual message
+# @csrf_exempt
+# @require_POST
+# def send_whatsapp_message(request):
+#     try:
+#         post_data = json.loads(request.body.decode("utf-8"))
+#         to = post_data.get("name")
+#         # print("Received 'to' parameter: ", to)
+
+#         PhoneNumber.objects.get_or_create(number=to)
+
+#         if not to:
+#             return JsonResponse({"error": "Missing 'to' parameter"}, status=400)
+
+#         data = {
+#             "messaging_product": "whatsapp",
+#             "recipient_type": "individual",
+#             "to": to,
+#             "type": "template",
+#             "template": {"name": "developer_test", "language": {"code": "en"}},
+#         }
+
+#         url = "https://graph.facebook.com/v17.0/123004784227116/messages"
+#         headers = {
+#             "Authorization": "Bearer "
+#             + bearer_token,  # Include the Bearer token in the headers
+#             "Content-Type": "application/json",
+#         }
+#         # print(headers)
+
+#         response = requests.post(url, headers=headers, json=data)
+#         response_data = response.json()
+#         return JsonResponse(response_data, status=response.status_code)
+
+#     except json.JSONDecodeError:
+#         return JsonResponse({"error": "Invalid JSON data"}, status=400)
+#     except requests.exceptions.RequestException as e:
+#         return JsonResponse({"error": str(e)}, status=500)
