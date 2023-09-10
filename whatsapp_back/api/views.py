@@ -9,6 +9,7 @@ from .serializers import (
     PhoneNumberSerializer,
     ExcelSerializer,
     WhatsAppBulkMessageSerializer,
+    MessageTemplateSerializer,
 )
 from .models import PhoneNumber
 from openpyxl import load_workbook
@@ -63,8 +64,8 @@ class PhoneNumberUpload(APIView):
 
 
 # send bulk messages manually
-# @csrf_exempt
-# @require_POST
+
+
 @api_view(["POST"])
 def send_whatsapp_bulk_messages(request):
     try:
@@ -109,12 +110,10 @@ def send_whatsapp_bulk_messages(request):
             except json.JSONDecodeError:
                 results.append({"error": "Invalid JSON data"})
 
-        # Ensure all elements in the results list are dictionaries
         for i, result in enumerate(results):
             if not isinstance(result, dict):
                 results[i] = {"error": str(result)}
 
-        # Return JsonResponse with safe=False
         return JsonResponse(results, status=200, safe=False)
 
     except json.JSONDecodeError:
@@ -124,8 +123,6 @@ def send_whatsapp_bulk_messages(request):
 
 
 # send bulk messages from addded names from database
-# @csrf_exempt
-# @
 @api_view(["POST"])
 def send_whatsapp_model_bulk_messages(request):
     try:
@@ -148,7 +145,7 @@ def send_whatsapp_model_bulk_messages(request):
                 "recipient_type": "individual",
                 "to": number,
                 "type": "template",
-                "template": {"name": "developer_test", "language": {"code": "en"}},
+                "template": {"name": "hello_world", "language": {"code": "en"}},
             }
 
             url = "https://graph.facebook.com/v17.0/123004784227116/messages"
@@ -176,6 +173,207 @@ def send_whatsapp_model_bulk_messages(request):
         return JsonResponse({"error": "Invalid JSON data"}, status=400)
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
+
+
+# get templates
+def get_templates(request):
+    url = "https://graph.facebook.com/v17.0/116889218178278/message_templates"
+    headers = {
+        "Authorization": "Bearer " + bearer_token,
+    }
+
+    try:
+        response = requests.get(url, headers=headers)
+        data = response.json()
+        templates = data.get("data", [])
+
+        names = [template.get("name", "") for template in templates]
+        template_id = [template.get("id", "") for template in templates]
+        components = [template.get("components", []) for template in templates]
+
+        name_response = {"names": names, "id": template_id}
+
+        components_response = {
+            "components": components,
+        }
+
+        print(data)
+        return JsonResponse({"data": templates})
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+@api_view(["POST"])
+def create_text_template(request):
+    facebook_api_url = (
+        "https://graph.facebook.com/v17.0/116889218178278/message_templates"
+    )
+    serializer = MessageTemplateSerializer(data=request.data)
+
+    if serializer.is_valid():
+        data = serializer.validated_data
+        template_name = data.get("template_name")
+        body_text = data.get("body_text")
+
+        post_data = json.dumps(
+            {
+                "name": template_name,
+                "category": "MARKETING",
+                "language": "en",
+                "components": [{"type": "BODY", "text": body_text}],
+            }
+        )
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + bearer_token,
+        }
+
+        response = requests.post(facebook_api_url, data=post_data, headers=headers)
+        response_data = response.json()
+
+        if response.status_code == status.HTTP_200_OK:
+            return Response(
+                {"message": response_data},
+                status=status.HTTP_200_OK,
+            )
+        else:
+            return Response(
+                {"message": response_data},
+                status=response.status_code,
+            )
+    else:
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(["POST"])
+def create_text_template_button_site(request):
+    facebook_api_url = (
+        "https://graph.facebook.com/v17.0/116889218178278/message_templates"
+    )
+    serializer = MessageTemplateSerializer(data=request.data)
+
+    if serializer.is_valid():
+        data = serializer.validated_data
+        template_name = data.get("template_name")
+        header_text = data.get("header_text")
+        body_text = data.get("body_text")
+        footer_text = data.get("footer_text")
+        button_type = data.get("button_type")
+        button_text = data.get("button_text")
+        button_url = data.get("button_url")
+
+        post_data = json.dumps(
+            {
+                "name": template_name,
+                "category": "MARKETING",
+                "components": [
+                    {"type": "HEADER", "format": "TEXT", "text": header_text},
+                    {
+                        "type": "BODY",
+                        "text": body_text,
+                    },
+                    {"type": "FOOTER", "text": footer_text},
+                    {
+                        "type": "BUTTONS",
+                        "buttons": [
+                            {
+                                "type": button_type,
+                                "text": button_text,
+                                "url": button_url,
+                            }
+                        ],
+                    },
+                ],
+                "language": "en",
+            }
+        )
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + bearer_token,
+        }
+
+        response = requests.post(facebook_api_url, data=post_data, headers=headers)
+        response_data = response.json()
+
+        if response.status_code == status.HTTP_200_OK:
+            return Response(
+                {"message": response_data},
+                status=status.HTTP_200_OK,
+            )
+        else:
+            return Response(
+                {"message": response_data},
+                status=response.status_code,
+            )
+    else:
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(["POST"])
+def create_text_template_button_call(request):
+    facebook_api_url = (
+        "https://graph.facebook.com/v17.0/116889218178278/message_templates"
+    )
+    serializer = MessageTemplateSerializer(data=request.data)
+
+    if serializer.is_valid():
+        data = serializer.validated_data
+        template_name = data.get("template_name")
+        header_text = data.get("header_text")
+        body_text = data.get("body_text")
+        footer_text = data.get("footer_text")
+        button_type = data.get("button_type")
+        button_text = data.get("button_text")
+        button_url = data.get("button_url")
+
+        post_data = json.dumps(
+            {
+                "name": template_name,
+                "category": "MARKETING",
+                "components": [
+                    {"type": "HEADER", "format": "TEXT", "text": header_text},
+                    {
+                        "type": "BODY",
+                        "text": body_text,
+                    },
+                    {"type": "FOOTER", "text": footer_text},
+                    {
+                        "type": "BUTTONS",
+                        "buttons": [
+                            {
+                                "type": button_type,
+                                "text": button_text,
+                                "url": button_url,
+                            }
+                        ],
+                    },
+                ],
+                "language": "en",
+            }
+        )
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + bearer_token,
+        }
+
+        response = requests.post(facebook_api_url, data=post_data, headers=headers)
+        response_data = response.json()
+
+        if response.status_code == status.HTTP_200_OK:
+            return Response(
+                {"message": response_data},
+                status=status.HTTP_200_OK,
+            )
+        else:
+            return Response(
+                {"message": response_data},
+                status=response.status_code,
+            )
+    else:
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 # privacy policy
