@@ -21,7 +21,8 @@ urlpatterns = [
         views.send_whatsapp_model_bulk_messages,
         name="send_whatsapp_model_bulk_messages",
     ),
-    path("get_templates/", views.get_templates, name="get_templates"),
+    path("get_templates/", views.get_templates_message, name="get_templates_message"),
+    path("get_templates/lists", views.get_templates_list, name="get_templates_list"),
     path(
         "post_template/text",
         views.create_text_template,
@@ -36,6 +37,16 @@ urlpatterns = [
         "post_template/call",
         views.create_text_template_button_call,
         name="create_text_template_button_call",
+    ),
+    path(
+        "upload/sent",
+        views.excel_sent_message,
+        name="excel_sent_message",
+    ),
+    path(
+        "upload/data",
+        views.excel_upload_message,
+        name="excel_upload_message",
     ),
     path("upload/", PhoneNumberUpload.as_view(), name="upload_phone_numbers"),
 ]

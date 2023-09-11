@@ -62,6 +62,98 @@ class PhoneNumberUpload(APIView):
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    # class PhoneNumberUpload(APIView):
+
+
+@api_view(["POST"])
+def excel_sent_message(request):
+    try:
+        serializer = ExcelSerializer(data=request.data)
+
+        if serializer.is_valid():
+            excel_file = serializer.validated_data["excel_file"]
+            template_name = serializer.validated_data["template_name"]
+            workbook = load_workbook(excel_file, read_only=True)
+            worksheet = workbook.active
+            results = []
+
+            for row in worksheet.iter_rows(values_only=True):
+                raw_number = str(row[0])
+                # replace 0 and add +91
+                if raw_number.startswith("0"):
+                    raw_number = "+91" + raw_number[1:]
+                # if no +91 add +91
+                if not raw_number.startswith("+91"):
+                    raw_number = "+91" + raw_number
+                # model save
+                # PhoneNumber.objects.get_or_create(number=raw_number)
+                PhoneNumber.objects.get_or_create(number=raw_number)
+
+                data = {
+                    "messaging_product": "whatsapp",
+                    "recipient_type": "individual",
+                    "to": raw_number,
+                    "type": "template",
+                    "template": {"name": template_name, "language": {"code": "en"}},
+                }
+                print(data)
+
+                url = "https://graph.facebook.com/v17.0/123004784227116/messages"
+                headers = {
+                    "Authorization": "Bearer " + bearer_token,
+                    "Content-Type": "application/json",
+                }
+
+                try:
+                    response = requests.post(url, headers=headers, json=data)
+                    response_data = response.json()
+                    results.append(response_data)
+
+                except json.JSONDecodeError:
+                    return JsonResponse({"error": "Invalid JSON data"}, status=400)
+                return Response(
+                    {"message": "Phone numbers imported successfully"},
+                    status=status.HTTP_201_CREATED,
+                )
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+@api_view(["POST"])
+def excel_upload_message(request):
+    try:
+        serializer = ExcelSerializer(data=request.data)
+
+        if serializer.is_valid():
+            excel_file = serializer.validated_data["excel_file"]
+            workbook = load_workbook(excel_file, read_only=True)
+            worksheet = workbook.active
+            results = []
+
+            for row in worksheet.iter_rows(values_only=True):
+                raw_number = str(row[0])
+                # replace 0 and add +91
+                if raw_number.startswith("0"):
+                    raw_number = "+91" + raw_number[1:]
+                # if no +91 add +91
+                if not raw_number.startswith("+91"):
+                    raw_number = "+91" + raw_number
+                # model save
+                # PhoneNumber.objects.get_or_create(number=raw_number)
+                print(raw_number)
+                PhoneNumber.objects.get_or_create(number=raw_number)
+
+            return Response(
+                {"message": "Phone numbers imported successfully"},
+                status=status.HTTP_201_CREATED,
+            )
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
 
 # send bulk messages manually
 
@@ -72,7 +164,9 @@ def send_whatsapp_bulk_messages(request):
         serializer = WhatsAppBulkMessageSerializer(data=request.data)
 
         if serializer.is_valid():
+            template_name = serializer.validated_data.get("template_name")
             numbers = serializer.validated_data.get("numbers")
+            print(template_name)
             results = []
 
         for number in numbers:
@@ -92,9 +186,8 @@ def send_whatsapp_bulk_messages(request):
                 "recipient_type": "individual",
                 "to": number,
                 "type": "template",
-                "template": {"name": "developer_test", "language": {"code": "en"}},
+                "template": {"name": template_name, "language": {"code": "en"}},
             }
-
             url = "https://graph.facebook.com/v17.0/123004784227116/messages"
             headers = {
                 "Authorization": "Bearer " + bearer_token,
@@ -126,8 +219,10 @@ def send_whatsapp_bulk_messages(request):
 @api_view(["POST"])
 def send_whatsapp_model_bulk_messages(request):
     try:
+        template_name = request.GET.get("template_name")
         get_numbers = PhoneNumber.objects.values_list("number", flat=True)
         numbers = list(get_numbers)
+        print(template_name)
 
         if not numbers or not isinstance(numbers, list):
             return JsonResponse(
@@ -145,7 +240,7 @@ def send_whatsapp_model_bulk_messages(request):
                 "recipient_type": "individual",
                 "to": number,
                 "type": "template",
-                "template": {"name": "hello_world", "language": {"code": "en"}},
+                "template": {"name": template_name, "language": {"code": "en"}},
             }
 
             url = "https://graph.facebook.com/v17.0/123004784227116/messages"
@@ -176,7 +271,7 @@ def send_whatsapp_model_bulk_messages(request):
 
 
 # get templates
-def get_templates(request):
+def get_templates_message(request):
     url = "https://graph.facebook.com/v17.0/116889218178278/message_templates"
     headers = {
         "Authorization": "Bearer " + bearer_token,
@@ -188,17 +283,36 @@ def get_templates(request):
         templates = data.get("data", [])
 
         names = [template.get("name", "") for template in templates]
-        template_id = [template.get("id", "") for template in templates]
         components = [template.get("components", []) for template in templates]
 
-        name_response = {"names": names, "id": template_id}
+        name_response = {"names": names, "components": components}
 
-        components_response = {
-            "components": components,
-        }
+        # print(data)
+        return JsonResponse({"data": name_response})
+        # return JsonResponse({"data": templates})
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
 
-        print(data)
+
+def get_templates_list(request):
+    url = "https://graph.facebook.com/v17.0/116889218178278/message_templates"
+    headers = {
+        "Authorization": "Bearer " + bearer_token,
+    }
+
+    try:
+        response = requests.get(url, headers=headers)
+        data = response.json()
+        templates = data.get("data", [])
+
+        names = [template.get("name", "") for template in templates]
+        components = [template.get("components", []) for template in templates]
+
+        name_response = {"names": names, "components": components}
+
+        # print(data)
         return JsonResponse({"data": templates})
+        # return JsonResponse({"data": name_response})
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
 
@@ -278,7 +392,7 @@ def create_text_template_button_site(request):
                         "type": "BUTTONS",
                         "buttons": [
                             {
-                                "type": button_type,
+                                "type": "URL",
                                 "text": button_text,
                                 "url": button_url,
                             }
@@ -343,9 +457,9 @@ def create_text_template_button_call(request):
                         "type": "BUTTONS",
                         "buttons": [
                             {
-                                "type": button_type,
+                                "type": "PHONE_NUMBER",
                                 "text": button_text,
-                                "url": button_url,
+                                "phone_number": button_url,
                             }
                         ],
                     },
