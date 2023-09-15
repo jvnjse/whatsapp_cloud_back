@@ -1,15 +1,14 @@
 from django.urls import path
 from . import views
-from .views import PhoneNumberUpload, PhoneNumberList
+from .views import (
+    PhoneNumberUpload,
+    PhoneNumberList,
+    UserRegistrationView,
+    UserLoginView,
+)
 
 urlpatterns = [
-    path("", views.index, name="index"),
-    path("privacy/", views.privacy, name="privacy"),
-    # GET request
     path("webhook/", views.whatsapp_webhook, name="whatsapp_webhook"),
-    # POST request
-    # path("webhook/", views.whatsapp_message, name="whatsapp_message"),
-    # path("sent-message/", views.send_whatsapp_message, name="send_whatsapp_message"),
     path("phone-numbers/", PhoneNumberList.as_view(), name="phone-number-list"),
     path(
         "sent-messages/",
@@ -48,5 +47,14 @@ urlpatterns = [
         views.excel_upload_message,
         name="excel_upload_message",
     ),
+    path(
+        "upload/image",
+        views.upload_image,
+        name="upload_image",
+    ),
     path("upload/", PhoneNumberUpload.as_view(), name="upload_phone_numbers"),
+    path("register/", UserRegistrationView.as_view(), name="user_registration"),
+    path("login/", UserLoginView.as_view(), name="user_login"),
+    path("", views.index, name="index"),
+    path("privacy/", views.privacy, name="privacy"),
 ]

@@ -2,21 +2,120 @@ import requests, json
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework.views import APIView
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework import status
 from .serializers import (
     PhoneNumberSerializer,
     ExcelSerializer,
     WhatsAppBulkMessageSerializer,
     MessageTemplateSerializer,
+    ImageUploadSerializer,
+    CustomUserSerializer,
+    UserLoginSerializer,
 )
-from .models import PhoneNumber
+from rest_framework_simplejwt.tokens import RefreshToken
+from .models import PhoneNumber, CustomUser
 from openpyxl import load_workbook
 from decouple import config
 
 my_token = "your_verify_token"
 bearer_token = config("TOKEN")
+phone_number_id = config("PHONE_NO_ID")
+business_id = config("BUSINESS_ID")
+
+
+def get_tokens_for_user(user):
+    refresh = RefreshToken.for_user(user)
+
+    return {
+        "refresh": str(refresh),
+        "access": str(refresh.access_token),
+    }
+
+
+class UserRegistrationView(APIView):
+    def post(self, request):
+        serializer = CustomUserSerializer(data=request.data)
+        if serializer.is_valid():
+            user = serializer.save()
+            response_data = {
+                "message": "User registered successfully",
+                "user": serializer.data,
+            }
+            return Response(response_data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class UserLoginView(APIView):
+    def post(self, request):
+        serializer = UserLoginSerializer(data=request.data)
+        if serializer.is_valid():
+            user = serializer.validated_data["user"]
+            token = get_tokens_for_user(user)
+            return Response(
+                {
+                    "token": token,
+                    "is_manager": user.is_staff,
+                    "message": "Login successful",
+                },
+                status=status.HTTP_200_OK,
+            )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+# def image_upload(request):
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def upload_image(request):
+    url1 = (
+        "https://graph.facebook.com/v18.0/2019843135044267/uploads?access_token="
+        + bearer_token
+        + "&file_length=100"
+    )
+
+    response1 = requests.post(url1)
+
+    if response1.status_code != 200:
+        return JsonResponse(
+            {"error": "Failed to make the first POST request"}, status=500
+        )
+
+    try:
+        response1_data = response1.json()
+        upload_session_key = response1_data["id"]
+    except ValueError:
+        return JsonResponse({"error": "Invalid JSON in the first response"}, status=500)
+
+    serializer = ImageUploadSerializer(data=request.data)
+    if serializer.is_valid():
+        image_file = serializer.validated_data["image_file"]
+
+        url2 = "https://graph.facebook.com/v18.0/" + upload_session_key
+
+        headers = {
+            "Authorization": "OAuth " + bearer_token,
+        }
+
+        files = {"source": image_file}
+
+        # Step 4: Make the second POST request to upload the image
+        response2 = requests.post(url2, headers=headers, files=files)
+
+        if response2.status_code != 200:
+            return JsonResponse({"error": response2.json()}, status=500)
+
+        # Step 5: Extract and return the JSON data from the second response
+        try:
+            response2_data = response2.json()
+            return JsonResponse(response2_data)
+        except ValueError:
+            return JsonResponse(
+                {"error": "Invalid JSON in the second response"}, status=500
+            )
+
+    return JsonResponse({"error": "Invalid data"}, status=400)
 
 
 def index(request):
@@ -96,9 +195,11 @@ def excel_sent_message(request):
                     "type": "template",
                     "template": {"name": template_name, "language": {"code": "en"}},
                 }
-                print(data)
+                # print(data)
 
-                url = "https://graph.facebook.com/v17.0/123004784227116/messages"
+                url = (
+                    "https://graph.facebook.com/v17.0/" + phone_number_id + "/messages"
+                )
                 headers = {
                     "Authorization": "Bearer " + bearer_token,
                     "Content-Type": "application/json",
@@ -142,7 +243,7 @@ def excel_upload_message(request):
                     raw_number = "+91" + raw_number
                 # model save
                 # PhoneNumber.objects.get_or_create(number=raw_number)
-                print(raw_number)
+                # print(raw_number)
                 PhoneNumber.objects.get_or_create(number=raw_number)
 
             return Response(
@@ -156,8 +257,6 @@ def excel_upload_message(request):
 
 
 # send bulk messages manually
-
-
 @api_view(["POST"])
 def send_whatsapp_bulk_messages(request):
     try:
@@ -166,7 +265,7 @@ def send_whatsapp_bulk_messages(request):
         if serializer.is_valid():
             template_name = serializer.validated_data.get("template_name")
             numbers = serializer.validated_data.get("numbers")
-            print(template_name)
+            # print(template_name)
             results = []
 
         for number in numbers:
@@ -188,7 +287,7 @@ def send_whatsapp_bulk_messages(request):
                 "type": "template",
                 "template": {"name": template_name, "language": {"code": "en"}},
             }
-            url = "https://graph.facebook.com/v17.0/123004784227116/messages"
+            url = "https://graph.facebook.com/v17.0/" + phone_number_id + "/messages"
             headers = {
                 "Authorization": "Bearer " + bearer_token,
                 "Content-Type": "application/json",
@@ -222,7 +321,7 @@ def send_whatsapp_model_bulk_messages(request):
         template_name = request.GET.get("template_name")
         get_numbers = PhoneNumber.objects.values_list("number", flat=True)
         numbers = list(get_numbers)
-        print(template_name)
+        # print(template_name)
 
         if not numbers or not isinstance(numbers, list):
             return JsonResponse(
@@ -243,7 +342,7 @@ def send_whatsapp_model_bulk_messages(request):
                 "template": {"name": template_name, "language": {"code": "en"}},
             }
 
-            url = "https://graph.facebook.com/v17.0/123004784227116/messages"
+            url = "https://graph.facebook.com/v17.0/" + phone_number_id + "/messages"
             headers = {
                 "Authorization": "Bearer " + bearer_token,
                 "Content-Type": "application/json",
@@ -272,7 +371,7 @@ def send_whatsapp_model_bulk_messages(request):
 
 # get templates
 def get_templates_message(request):
-    url = "https://graph.facebook.com/v17.0/116889218178278/message_templates"
+    url = "https://graph.facebook.com/v17.0/" + business_id + "/message_templates"
     headers = {
         "Authorization": "Bearer " + bearer_token,
     }
@@ -295,7 +394,7 @@ def get_templates_message(request):
 
 
 def get_templates_list(request):
-    url = "https://graph.facebook.com/v17.0/116889218178278/message_templates"
+    url = "https://graph.facebook.com/v17.0/" + business_id + "/message_templates"
     headers = {
         "Authorization": "Bearer " + bearer_token,
     }
@@ -320,21 +419,27 @@ def get_templates_list(request):
 @api_view(["POST"])
 def create_text_template(request):
     facebook_api_url = (
-        "https://graph.facebook.com/v17.0/116889218178278/message_templates"
+        "https://graph.facebook.com/v17.0/" + business_id + "/message_templates"
     )
     serializer = MessageTemplateSerializer(data=request.data)
 
     if serializer.is_valid():
         data = serializer.validated_data
         template_name = data.get("template_name")
+        header_text = data.get("header_text")
         body_text = data.get("body_text")
+        footer_text = data.get("footer_text")
 
         post_data = json.dumps(
             {
                 "name": template_name,
                 "category": "MARKETING",
                 "language": "en",
-                "components": [{"type": "BODY", "text": body_text}],
+                "components": [
+                    {"type": "HEADER", "text": header_text},
+                    {"type": "BODY", "text": body_text},
+                    {"type": "FOOTER", "text": footer_text},
+                ],
             }
         )
 
@@ -363,7 +468,7 @@ def create_text_template(request):
 @api_view(["POST"])
 def create_text_template_button_site(request):
     facebook_api_url = (
-        "https://graph.facebook.com/v17.0/116889218178278/message_templates"
+        "https://graph.facebook.com/v17.0/" + business_id + "/message_templates"
     )
     serializer = MessageTemplateSerializer(data=request.data)
 
@@ -428,7 +533,7 @@ def create_text_template_button_site(request):
 @api_view(["POST"])
 def create_text_template_button_call(request):
     facebook_api_url = (
-        "https://graph.facebook.com/v17.0/116889218178278/message_templates"
+        "https://graph.facebook.com/v17.0/" + business_id + "/message_templates"
     )
     serializer = MessageTemplateSerializer(data=request.data)
 
