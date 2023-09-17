@@ -38,6 +38,11 @@ urlpatterns = [
         name="create_text_template_button_call",
     ),
     path(
+        "post_template/image",
+        views.create_image_template,
+        name="create_image_template",
+    ),
+    path(
         "upload/sent",
         views.excel_sent_message,
         name="excel_sent_message",
@@ -51,6 +56,11 @@ urlpatterns = [
         "upload/image",
         views.upload_image,
         name="upload_image",
+    ),
+    path(
+        "delete/template",
+        views.delete_template,
+        name="delete_template",
     ),
     path("upload/", PhoneNumberUpload.as_view(), name="upload_phone_numbers"),
     path("register/", UserRegistrationView.as_view(), name="user_registration"),

@@ -67,12 +67,12 @@ class UserLoginView(APIView):
 
 # def image_upload(request):
 @api_view(["POST"])
-@permission_classes([IsAuthenticated])
+# @permission_classes([IsAuthenticated])
 def upload_image(request):
     url1 = (
         "https://graph.facebook.com/v18.0/2019843135044267/uploads?access_token="
         + bearer_token
-        + "&file_length=100"
+        + "&file_length=0&file_type=image/jpg"
     )
 
     response1 = requests.post(url1)
@@ -101,7 +101,7 @@ def upload_image(request):
         files = {"source": image_file}
 
         # Step 4: Make the second POST request to upload the image
-        response2 = requests.post(url2, headers=headers, files=files)
+        response2 = requests.post(url2, headers=headers, data=image_file)
 
         if response2.status_code != 200:
             return JsonResponse({"error": response2.json()}, status=500)
@@ -116,6 +116,34 @@ def upload_image(request):
             )
 
     return JsonResponse({"error": "Invalid data"}, status=400)
+
+
+@api_view(["POST"])
+def delete_template(request):
+    try:
+        template_name = request.GET.get("template_name")
+        cleaned_string = template_name.replace('"', "")
+
+        url = (
+            "https://graph.facebook.com/v17.0/"
+            + business_id
+            + "/message_templates?name="
+            + cleaned_string
+        )
+        print(url)
+        headers = {
+            "Authorization": "Bearer " + bearer_token,
+            "Content-Type": "application/json",
+        }
+        response = requests.request("DELETE", url, headers=headers)
+        response_data = response.json()
+        return Response(
+            {"message": response_data},
+            status=status.HTTP_201_CREATED,
+        )
+
+    except:
+        return HttpResponse("ERROR")
 
 
 def index(request):
@@ -437,6 +465,59 @@ def create_text_template(request):
                 "language": "en",
                 "components": [
                     {"type": "HEADER", "text": header_text},
+                    {"type": "BODY", "text": body_text},
+                    {"type": "FOOTER", "text": footer_text},
+                ],
+            }
+        )
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + bearer_token,
+        }
+
+        response = requests.post(facebook_api_url, data=post_data, headers=headers)
+        response_data = response.json()
+
+        if response.status_code == status.HTTP_200_OK:
+            return Response(
+                {"message": response_data},
+                status=status.HTTP_200_OK,
+            )
+        else:
+            return Response(
+                {"message": response_data},
+                status=response.status_code,
+            )
+    else:
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(["POST"])
+def create_image_template(request):
+    facebook_api_url = (
+        "https://graph.facebook.com/v17.0/" + business_id + "/message_templates"
+    )
+    serializer = MessageTemplateSerializer(data=request.data)
+
+    if serializer.is_valid():
+        data = serializer.validated_data
+        template_name = data.get("template_name")
+        header_text = data.get("header_text")
+        body_text = data.get("body_text")
+        footer_text = data.get("footer_text")
+
+        post_data = json.dumps(
+            {
+                "name": template_name,
+                "category": "MARKETING",
+                "language": "en",
+                "components": [
+                    {
+                        "type": "HEADER",
+                        "format": "IMAGE",
+                        "example": {"header_handle": [header_text]},
+                    },
                     {"type": "BODY", "text": body_text},
                     {"type": "FOOTER", "text": footer_text},
                 ],
