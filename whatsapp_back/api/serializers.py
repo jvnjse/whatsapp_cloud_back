@@ -1,5 +1,8 @@
 from rest_framework import serializers
 from .models import PhoneNumber, CustomUser
+import random
+import string
+from django.core.mail import send_mail
 
 
 class CustomUserSerializer(serializers.ModelSerializer):
@@ -8,16 +11,31 @@ class CustomUserSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "email",
-            "password",
         )
-        extra_kwargs = {"password": {"write_only": True}}
+        # extra_kwargs = {"password": {"write_only": True}}
 
     def create(self, validated_data):
-        password = validated_data.pop("password", None)
-        instance = self.Meta.model(**validated_data)
-        if password is not None:
-            instance.set_password(password)
+        email = validated_data.get("email")
+
+        # Generate a random password
+        password = "".join(
+            random.choice(string.ascii_letters + string.digits) for _ in range(6)
+        )
+
+        # Create the user instance with the email and set the password
+        instance = self.Meta.model(email=email)
+        instance.set_password(password)
         instance.save()
+
+        # Send the random password to the provided email address
+        send_mail(
+            subject="Your New Account Password",
+            message=f"Your password is: {password}",
+            from_email="jeevanjose2016@gmail.com",  # Change this to your email address
+            recipient_list=[email],
+            fail_silently=False,  # Set to True to suppress errors if email fails to send
+        )
+
         return instance
 
 
@@ -46,6 +64,12 @@ class ExcelSerializer(serializers.Serializer):
     template_name = serializers.CharField(required=False)
 
 
+class ExcelImageSerializer(serializers.Serializer):
+    excel_file = serializers.FileField()
+    template_name = serializers.CharField(required=False)
+    image_link = serializers.CharField()
+
+
 class PhoneNumberSerializer(serializers.ModelSerializer):
     class Meta:
         model = PhoneNumber
@@ -59,6 +83,12 @@ class ImageUploadSerializer(serializers.Serializer):
 class WhatsAppBulkMessageSerializer(serializers.Serializer):
     numbers = serializers.ListField(child=serializers.CharField(max_length=20))
     template_name = serializers.CharField()
+
+
+class WhatsAppBulkMessageImageSerializer(serializers.Serializer):
+    numbers = serializers.ListField(child=serializers.CharField(max_length=20))
+    template_name = serializers.CharField()
+    image_link = serializers.CharField()
 
 
 class MessageTemplateSerializer(serializers.Serializer):

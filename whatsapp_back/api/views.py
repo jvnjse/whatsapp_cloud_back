@@ -9,7 +9,9 @@ from rest_framework import status
 from .serializers import (
     PhoneNumberSerializer,
     ExcelSerializer,
+    ExcelImageSerializer,
     WhatsAppBulkMessageSerializer,
+    WhatsAppBulkMessageImageSerializer,
     MessageTemplateSerializer,
     ImageUploadSerializer,
     CustomUserSerializer,
@@ -251,6 +253,81 @@ def excel_sent_message(request):
 
 
 @api_view(["POST"])
+def excel_sent_message_images(request):
+    try:
+        serializer = ExcelImageSerializer(data=request.data)
+
+        if serializer.is_valid():
+            excel_file = serializer.validated_data["excel_file"]
+            template_name = serializer.validated_data["template_name"]
+            image_link = serializer.validated_data["image_link"]
+
+            workbook = load_workbook(excel_file, read_only=True)
+            worksheet = workbook.active
+            results = []
+
+            for row in worksheet.iter_rows(values_only=True):
+                raw_number = str(row[0])
+                # replace 0 and add +91
+                if raw_number.startswith("0"):
+                    raw_number = "+91" + raw_number[1:]
+                # if no +91 add +91
+                if not raw_number.startswith("+91"):
+                    raw_number = "+91" + raw_number
+                # model save
+                # PhoneNumber.objects.get_or_create(number=raw_number)
+                PhoneNumber.objects.get_or_create(number=raw_number)
+
+                data = {
+                    "messaging_product": "whatsapp",
+                    "recipient_type": "individual",
+                    "to": raw_number,
+                    "type": "template",
+                    "template": {
+                        "name": template_name,
+                        "components": [
+                            {
+                                "type": "HEADER",
+                                # "format": "IMAGE",
+                                "parameters": [
+                                    {
+                                        "type": "image",
+                                        "image": {"link": image_link},
+                                    }
+                                ],
+                            }
+                        ],
+                        "language": {"code": "en"},
+                    },
+                }
+                # print(data)
+
+                url = (
+                    "https://graph.facebook.com/v17.0/" + phone_number_id + "/messages"
+                )
+                headers = {
+                    "Authorization": "Bearer " + bearer_token,
+                    "Content-Type": "application/json",
+                }
+
+                try:
+                    response = requests.post(url, headers=headers, json=data)
+                    response_data = response.json()
+                    results.append(response_data)
+
+                except json.JSONDecodeError:
+                    return JsonResponse({"error": "Invalid JSON data"}, status=400)
+                return Response(
+                    {"message": "Phone numbers imported successfully"},
+                    status=status.HTTP_201_CREATED,
+                )
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+@api_view(["POST"])
 def excel_upload_message(request):
     try:
         serializer = ExcelSerializer(data=request.data)
@@ -342,6 +419,81 @@ def send_whatsapp_bulk_messages(request):
         return JsonResponse({"error": str(e)}, status=500)
 
 
+# image
+@api_view(["POST"])
+def send_whatsapp_bulk_messages_images(request):
+    try:
+        serializer = WhatsAppBulkMessageImageSerializer(data=request.data)
+
+        if serializer.is_valid():
+            template_name = serializer.validated_data.get("template_name")
+            numbers = serializer.validated_data.get("numbers")
+            image_link = serializer.validated_data.get("image_link")
+
+            # print(template_name)
+            results = []
+
+        for number in numbers:
+            if number.startswith("0"):
+                number = "+91" + number[1:]
+
+            if not number.startswith("+91"):
+                number = "+91" + number
+
+            if not number:
+                results.append({"error": "Missing 'number' parameter"})
+                continue
+            PhoneNumber.objects.get_or_create(number=number)
+
+            data = {
+                "messaging_product": "whatsapp",
+                "recipient_type": "individual",
+                "to": number,
+                "type": "template",
+                "template": {
+                    "name": template_name,
+                    "components": [
+                        {
+                            "type": "HEADER",
+                            # "format": "IMAGE",
+                            "parameters": [
+                                {
+                                    "type": "image",
+                                    "image": {"link": image_link},
+                                }
+                            ],
+                        }
+                    ],
+                    "language": {"code": "en"},
+                },
+            }
+            url = "https://graph.facebook.com/v17.0/" + phone_number_id + "/messages"
+            headers = {
+                "Authorization": "Bearer " + bearer_token,
+                "Content-Type": "application/json",
+            }
+
+            try:
+                response = requests.post(url, headers=headers, json=data)
+                response_data = response.json()
+                results.append(response_data)
+            except requests.exceptions.RequestException as e:
+                results.append({"error": str(e)})
+            except json.JSONDecodeError:
+                results.append({"error": "Invalid JSON data"})
+
+        for i, result in enumerate(results):
+            if not isinstance(result, dict):
+                results[i] = {"error": str(result)}
+
+        return JsonResponse(results, status=200, safe=False)
+
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON data"}, status=400)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+
 # send bulk messages from addded names from database
 @api_view(["POST"])
 def send_whatsapp_model_bulk_messages(request):
@@ -369,6 +521,80 @@ def send_whatsapp_model_bulk_messages(request):
                 "type": "template",
                 "template": {"name": template_name, "language": {"code": "en"}},
             }
+
+            url = "https://graph.facebook.com/v17.0/" + phone_number_id + "/messages"
+            headers = {
+                "Authorization": "Bearer " + bearer_token,
+                "Content-Type": "application/json",
+            }
+
+            try:
+                response = requests.post(url, headers=headers, json=data)
+                response_data = response.json()
+                results.append(response_data)
+            except requests.exceptions.RequestException as e:
+                results.append({"error": str(e)})
+            except json.JSONDecodeError:
+                results.append({"error": "Invalid JSON data"})
+
+        for i, result in enumerate(results):
+            if not isinstance(result, dict):
+                results[i] = {"error": str(result)}
+
+        return JsonResponse(results, status=200, safe=False)
+
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON data"}, status=400)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+# send bulk messages from addded names from database
+@api_view(["POST"])
+def send_whatsapp_model_bulk_messages_images(request):
+    try:
+        template_name = request.GET.get("template_name")
+        image_url = request.GET.get("image_url")
+        print(image_url)
+        print(template_name)
+        get_numbers = PhoneNumber.objects.values_list("number", flat=True)
+        numbers = list(get_numbers)
+        # print(template_name)
+
+        if not numbers or not isinstance(numbers, list):
+            return JsonResponse(
+                {"error": "Missing or invalid 'numbers' parameter"}, status=400
+            )
+        results = []
+
+        for number in numbers:
+            if not number:
+                results.append({"error": "Missing 'number' parameter"})
+                continue
+
+            data = {
+                "messaging_product": "whatsapp",
+                "recipient_type": "individual",
+                "to": number,
+                "type": "template",
+                "template": {
+                    "name": template_name,
+                    "components": [
+                        {
+                            "type": "HEADER",
+                            # "format": "IMAGE",
+                            "parameters": [
+                                {
+                                    "type": "image",
+                                    "image": {"link": image_url},
+                                }
+                            ],
+                        }
+                    ],
+                    "language": {"code": "en"},
+                },
+            }
+            print(data)
 
             url = "https://graph.facebook.com/v17.0/" + phone_number_id + "/messages"
             headers = {

@@ -157,3 +157,12 @@ AUTHENTICATION_BACKENDS = [
     "django.contrib.auth.backends.ModelBackend",
 ]
 AUTH_USER_MODEL = "api.CustomUser"
+
+
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_HOST = "smtp.gmail.com"
+EMAIL_PORT = 587  # Use 465 for SSL or 587 for TLS
+EMAIL_USE_TLS = True  # Use TLS for security (False for SSL)
+EMAIL_USE_SSL = False  # Use SSL for security (True for SSL)
+EMAIL_HOST_USER = "jeevanjose2016@gmail.com"  # Your Gmail email address
+EMAIL_HOST_PASSWORD = "laobzarfcssjpmxi"  # Your Gmail password or an App Password if using 2-factor authentication

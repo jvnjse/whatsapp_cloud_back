@@ -16,9 +16,19 @@ urlpatterns = [
         name="send_whatsapp_bulk_messages",
     ),
     path(
+        "sent-messages/images",
+        views.send_whatsapp_bulk_messages_images,
+        name="send_whatsapp_bulk_messages_images",
+    ),
+    path(
         "sent-messages/data/",
         views.send_whatsapp_model_bulk_messages,
         name="send_whatsapp_model_bulk_messages",
+    ),
+    path(
+        "sent-messages/data/images",
+        views.send_whatsapp_model_bulk_messages_images,
+        name="send_whatsapp_model_bulk_messages_images",
     ),
     path("get_templates/", views.get_templates_message, name="get_templates_message"),
     path("get_templates/lists", views.get_templates_list, name="get_templates_list"),
@@ -46,6 +56,11 @@ urlpatterns = [
         "upload/sent",
         views.excel_sent_message,
         name="excel_sent_message",
+    ),
+    path(
+        "upload/sent/images",
+        views.excel_sent_message_images,
+        name="excel_sent_message_images",
     ),
     path(
         "upload/data",
