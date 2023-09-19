@@ -101,3 +101,10 @@ class MessageTemplateSerializer(serializers.Serializer):
     button_url = serializers.CharField(required=False)
     category = serializers.CharField(required=False)
     language = serializers.CharField(required=False)
+
+
+class MessageTextTemplateSerializer(serializers.Serializer):
+    template_name = serializers.CharField(required=False)
+    header_text = serializers.CharField(required=False)
+    body_text = serializers.CharField(required=False)
+    footer_text = serializers.CharField(required=False)

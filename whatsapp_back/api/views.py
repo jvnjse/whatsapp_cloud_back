@@ -13,6 +13,7 @@ from .serializers import (
     WhatsAppBulkMessageSerializer,
     WhatsAppBulkMessageImageSerializer,
     MessageTemplateSerializer,
+    MessageTextTemplateSerializer,
     ImageUploadSerializer,
     CustomUserSerializer,
     UserLoginSerializer,
@@ -675,7 +676,7 @@ def create_text_template(request):
     facebook_api_url = (
         "https://graph.facebook.com/v17.0/" + business_id + "/message_templates"
     )
-    serializer = MessageTemplateSerializer(data=request.data)
+    serializer = MessageTextTemplateSerializer(data=request.data)
 
     if serializer.is_valid():
         data = serializer.validated_data
@@ -690,7 +691,7 @@ def create_text_template(request):
                 "category": "MARKETING",
                 "language": "en",
                 "components": [
-                    {"type": "HEADER", "text": header_text},
+                    {"type": "HEADER", "format": "TEXT", "text": header_text},
                     {"type": "BODY", "text": body_text},
                     {"type": "FOOTER", "text": footer_text},
                 ],
