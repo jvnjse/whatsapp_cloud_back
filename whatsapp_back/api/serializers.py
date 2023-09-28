@@ -8,10 +8,7 @@ from django.core.mail import send_mail
 class CustomUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomUser
-        fields = (
-            "id",
-            "email",
-        )
+        fields = ("id", "email", "is_active", "is_staff")
         # extra_kwargs = {"password": {"write_only": True}}
 
     def create(self, validated_data):
@@ -62,6 +59,7 @@ class UserLoginSerializer(serializers.Serializer):
 class ExcelSerializer(serializers.Serializer):
     excel_file = serializers.FileField()
     template_name = serializers.CharField(required=False)
+    user_id = serializers.IntegerField()
 
 
 class ExcelImageSerializer(serializers.Serializer):
@@ -80,8 +78,16 @@ class ImageUploadSerializer(serializers.Serializer):
     image_file = serializers.FileField()
 
 
+class CredentialsSerializer(serializers.Serializer):
+    user_id = serializers.IntegerField()
+    phone_number_id = serializers.CharField()
+    whatsapp_business_id = serializers.CharField()
+    permanent_access_token = serializers.CharField()
+
+
 class WhatsAppBulkMessageSerializer(serializers.Serializer):
     numbers = serializers.ListField(child=serializers.CharField(max_length=20))
+    user_id = serializers.IntegerField()
     template_name = serializers.CharField()
 
 
@@ -89,6 +95,7 @@ class WhatsAppBulkMessageImageSerializer(serializers.Serializer):
     numbers = serializers.ListField(child=serializers.CharField(max_length=20))
     template_name = serializers.CharField()
     image_link = serializers.CharField()
+    user_id = serializers.IntegerField()
 
 
 class MessageTemplateSerializer(serializers.Serializer):

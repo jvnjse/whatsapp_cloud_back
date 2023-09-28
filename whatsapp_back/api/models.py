@@ -37,9 +37,19 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     )
 
 
-# Create your models here.
 class PhoneNumber(models.Model):
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
     number = models.CharField(max_length=20, unique=True)
 
     def __str__(self):
         return str(self.number)
+
+
+class WhatsappCredential(models.Model):
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    phone_number_id = models.CharField(max_length=30)
+    whatsapp_business_id = models.CharField(max_length=30)
+    permanent_access_token = models.CharField(max_length=500)
+
+    def __str__(self):
+        return str(self.user)

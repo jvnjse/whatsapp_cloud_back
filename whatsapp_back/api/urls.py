@@ -5,11 +5,15 @@ from .views import (
     PhoneNumberList,
     UserRegistrationView,
     UserLoginView,
+    UserListView,
+    UserDetailView,
 )
 
 urlpatterns = [
     path("webhook/", views.whatsapp_webhook, name="whatsapp_webhook"),
     path("phone-numbers/", PhoneNumberList.as_view(), name="phone-number-list"),
+    path("users/", UserListView.as_view(), name="user-list"),
+    path("users/<int:pk>/", UserDetailView.as_view(), name="user-list-detail"),
     path(
         "sent-messages/",
         views.send_whatsapp_bulk_messages,
@@ -76,6 +80,11 @@ urlpatterns = [
         "delete/template",
         views.delete_template,
         name="delete_template",
+    ),
+    path(
+        "upload/credentials",
+        views.upload_credentials,
+        name="upload_credentials",
     ),
     path("upload/", PhoneNumberUpload.as_view(), name="upload_phone_numbers"),
     path("register/", UserRegistrationView.as_view(), name="user_registration"),
