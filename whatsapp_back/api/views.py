@@ -1,6 +1,7 @@
 import requests, json
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
+from rest_framework import generics, permissions
 from rest_framework.views import APIView
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
@@ -19,13 +20,15 @@ from .serializers import (
     CustomUserSerializer,
     CredentialsSerializer,
     UserLoginSerializer,
+    ReferalStringSerializer,
 )
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import PhoneNumber, CustomUser, WhatsappCredential
 from openpyxl import load_workbook
 from decouple import config
 from django.contrib.auth import authenticate
-
+import urllib.parse
+import base64, os, random, string
 
 my_token = "your_verify_token"
 bearer_token = config("TOKEN")
@@ -35,6 +38,10 @@ business_id = config("BUSINESS_ID")
 
 def get_tokens_for_user(user):
     refresh = RefreshToken.for_user(user)
+
+    refresh.payload["user_id"] = user.id
+    refresh.payload["user_is_staff"] = user.is_staff
+    refresh.payload["user_is_distributor"] = user.is_distributor
 
     return {
         "access": str(refresh.access_token),
@@ -57,6 +64,22 @@ def get_credentials(user_id):
 
 
 @api_view(["POST"])
+# @permission_classes([IsAuthenticated])
+def validate_access_token(request):
+    user = request.user
+
+    try:
+        refresh = RefreshToken.for_user(user)
+
+        refresh.access_token.verify()
+
+        return Response({"valid": True})
+    except Exception as e:
+        return Response({"valid": False}, status=401)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def upload_credentials(request):
     if request.method == "POST":
         serializer = CredentialsSerializer(data=request.data)
@@ -154,18 +177,96 @@ class UserDetailView(RetrieveUpdateAPIView):
     permission_classes = [IsAdminUser]
 
 
+class UserChildrenListView(generics.ListAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def list(self, request, *args, **kwargs):
+        parent_user_id = self.kwargs.get("pk")
+
+        if parent_user_id:
+            children = CustomUser.objects.filter(parent_user_id=parent_user_id)
+            data = [
+                {"id": child.id, "email": child.email, "is_active": child.is_active}
+                for child in children
+            ]
+            return Response(data)
+        else:
+            return Response([])
+
+
+class UserHierarchyView(generics.RetrieveAPIView):
+    permission_classes = [permissions.IsAdminUser]
+
+    def retrieve(self, request, *args, **kwargs):
+        user_id = self.kwargs.get("pk")
+        user = CustomUser.objects.get(pk=user_id)
+        hierarchy_data = self.get_user_hierarchy(user)
+        return Response(hierarchy_data)
+
+    def get_user_hierarchy(self, user):
+        return self.build_hierarchy(user)
+
+    def build_hierarchy(self, user):
+        user_data = {
+            "id": user.id,
+            "email": user.email,
+            "is_active": user.is_active,
+            "is_distributor": user.is_distributor,
+            "children": [],
+        }
+
+        children = CustomUser.objects.filter(parent_user=user)
+        for child in children:
+            user_data["children"].append(self.build_hierarchy(child))
+
+        return user_data
+
+    def get_user_descendants(self, parent_user_id):
+        descendants = []
+        children = CustomUser.objects.filter(parent_user_id=parent_user_id)
+
+        for child in children:
+            descendants.append(child)
+            descendants.extend(self.get_user_descendants(child.id))
+
+        return descendants
+
+
+class ViewReferralStringAPIView(APIView):
+    def get(self, request, user_id):
+        user = CustomUser.objects.get(id=user_id)
+        serializer = ReferalStringSerializer(user)
+        return Response(serializer.data)
+
+    def put(self, request, user_id):
+        user = CustomUser.objects.get(id=user_id)
+        serializer = ReferalStringSerializer(user, data=request.data)
+        if serializer.is_valid():
+            refer = "".join(random.choices(string.ascii_uppercase + string.digits, k=8))
+            serializer.validated_data["referral_string"] = refer
+            print(refer)
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+# class EditReferralStringAPIView(APIView):
+
+
 # def image_upload(request):
 @api_view(["POST"])
-# @permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated])
 def upload_image(request):
     user_id = request.GET.get("user_id")
     get_credential = get_credentials(user_id)
     bearer_token = get_credential[0]["permanent_access_token"]
 
+    # Construct URL with encoded token
+    bearer_token = urllib.parse.quote(bearer_token, safe="")
     url1 = (
-        "https://graph.facebook.com/v18.0/2019843135044267/uploads?access_token="
+        "https://graph.facebook.com/v17.0/680026107241166/uploads?access_token="
         + bearer_token
-        + "&file_length=0&file_type=image/jpg"
+        + "&file_length=10000&file_type=image/jpg&file_type=image/png"
     )
 
     response1 = requests.post(url1)
@@ -185,15 +286,21 @@ def upload_image(request):
     if serializer.is_valid():
         image_file = serializer.validated_data["image_file"]
 
+        content = image_file.read()
+        file_name = os.path.basename(image_file.name)
+        # Encode binary data to base64
+        encoded_string = base64.b64encode(content).decode("utf-8")
+
+        # Build data URL
+        data_url = f"data:image;base64,{encoded_string}"
+        print(data_url)
+
         url2 = "https://graph.facebook.com/v18.0/" + upload_session_key
 
-        headers = {
-            "Authorization": "OAuth " + bearer_token,
-        }
+        headers = {"Authorization": "OAuth " + bearer_token, "file_offset": "0"}
 
-        files = {"source": image_file}
-
-        response2 = requests.post(url2, headers=headers, data=image_file)
+        # Remove data=image_file from this request
+        response2 = requests.post(url2, headers=headers, files={"source": data_url})
 
         if response2.status_code != 200:
             return JsonResponse({"error": response2.json()}, status=500)
@@ -210,6 +317,7 @@ def upload_image(request):
 
 
 @api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def delete_template(request):
     user_id = request.GET.get("user_id")
     get_credential = get_credentials(user_id)
@@ -248,6 +356,8 @@ def index(request):
 
 
 class PhoneNumberList(APIView):
+    permission_classes = [IsAuthenticated]
+
     def get(self, request, format=None):
         user_id = request.query_params.get("user_id")
         if user_id:
@@ -259,6 +369,8 @@ class PhoneNumberList(APIView):
 
 # numbers upload from excel
 class PhoneNumberUpload(APIView):
+    permission_classes = [IsAuthenticated]
+
     def post(self, request, format=None):
         serializer = ExcelSerializer(data=request.data)
 
@@ -291,6 +403,7 @@ class PhoneNumberUpload(APIView):
 
 
 @api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def excel_sent_message(request):
     try:
         serializer = ExcelSerializer(data=request.data)
@@ -355,6 +468,7 @@ def excel_sent_message(request):
 
 
 @api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def excel_sent_message_images(request):
     try:
         serializer = ExcelImageSerializer(data=request.data)
@@ -402,7 +516,11 @@ def excel_sent_message_images(request):
                                         "image": {"link": image_link},
                                     }
                                 ],
-                            }
+                            },
+                            {
+                                "type": "body",
+                                "parameters": [{"type": "text", "text": "TEXT-STRING"}],
+                            },
                         ],
                         "language": {"code": "en"},
                     },
@@ -435,6 +553,7 @@ def excel_sent_message_images(request):
 
 
 @api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def excel_upload_message(request):
     try:
         serializer = ExcelSerializer(data=request.data)
@@ -471,6 +590,7 @@ def excel_upload_message(request):
 
 
 @api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def send_whatsapp_bulk_messages(request):
     try:
         serializer = WhatsAppBulkMessageSerializer(data=request.data)
@@ -480,6 +600,7 @@ def send_whatsapp_bulk_messages(request):
             numbers = serializer.validated_data.get("numbers")
             user_id = serializer.validated_data.get("user_id")
             get_credential = get_credentials(user_id)
+            print(get_credential)
             phone_number_id = get_credential[0]["phone_number_id"]
             # business_id = get_credential[0]["whatsapp_business_id"]
             bearer_token = get_credential[0]["permanent_access_token"]
@@ -495,7 +616,7 @@ def send_whatsapp_bulk_messages(request):
             if not number:
                 results.append({"error": "Missing 'number' parameter"})
                 continue
-            PhoneNumber.objects.get_or_create(number=number)
+            PhoneNumber.objects.get_or_create(number=number, user_id=user_id)
 
             data = {
                 "messaging_product": "whatsapp",
@@ -533,6 +654,7 @@ def send_whatsapp_bulk_messages(request):
 
 # image
 @api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def send_whatsapp_bulk_messages_images(request):
     try:
         serializer = WhatsAppBulkMessageImageSerializer(data=request.data)
@@ -560,7 +682,7 @@ def send_whatsapp_bulk_messages_images(request):
             if not number:
                 results.append({"error": "Missing 'number' parameter"})
                 continue
-            PhoneNumber.objects.get_or_create(number=number)
+            PhoneNumber.objects.get_or_create(number=number, user_id=user_id)
 
             data = {
                 "messaging_product": "whatsapp",
@@ -571,8 +693,9 @@ def send_whatsapp_bulk_messages_images(request):
                     "name": template_name,
                     "components": [
                         {
-                            "type": "HEADER",
+                            "type": "header",
                             # "format": "IMAGE",
+                            # "example": {"header_handle": image_link},
                             "parameters": [
                                 {
                                     "type": "image",
@@ -613,6 +736,7 @@ def send_whatsapp_bulk_messages_images(request):
 
 # send bulk messages from addded names from database
 @api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def send_whatsapp_model_bulk_messages(request):
     try:
         template_name = request.GET.get("template_name")
@@ -676,6 +800,7 @@ def send_whatsapp_model_bulk_messages(request):
 
 # send bulk messages from addded names from database
 @api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def send_whatsapp_model_bulk_messages_images(request):
     try:
         template_name = request.GET.get("template_name")
@@ -754,6 +879,8 @@ def send_whatsapp_model_bulk_messages_images(request):
 
 
 # get templates
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def get_templates_message(request):
     user_id = request.GET.get("user_id")
     get_credential = get_credentials(user_id)
@@ -784,6 +911,8 @@ def get_templates_message(request):
         return JsonResponse({"error": str(e)}, status=500)
 
 
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def get_templates_list(request):
     user_id = request.GET.get("user_id")
     get_credential = get_credentials(user_id)
@@ -814,6 +943,7 @@ def get_templates_list(request):
 
 
 @api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def create_text_template(request):
     user_id = request.GET.get("user_id")
     get_credential = get_credentials(user_id)
@@ -868,6 +998,7 @@ def create_text_template(request):
 
 
 @api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def create_image_template(request):
     user_id = request.GET.get("user_id")
     get_credential = get_credentials(user_id)
@@ -927,6 +1058,7 @@ def create_image_template(request):
 
 
 @api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def create_text_template_button_site(request):
     user_id = request.GET.get("user_id")
     get_credential = get_credentials(user_id)
@@ -998,6 +1130,7 @@ def create_text_template_button_site(request):
 
 
 @api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def create_text_template_button_call(request):
     user_id = request.GET.get("user_id")
     get_credential = get_credentials(user_id)

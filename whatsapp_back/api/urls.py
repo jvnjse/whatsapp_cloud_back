@@ -1,15 +1,28 @@
 from django.urls import path
 from . import views
-from .views import (
-    PhoneNumberUpload,
-    PhoneNumberList,
-    UserRegistrationView,
-    UserLoginView,
-    UserListView,
-    UserDetailView,
-)
+from .views import *
+
+# from .views import (
+#     PhoneNumberUpload,
+#     PhoneNumberList,
+#     UserRegistrationView,
+#     UserLoginView,
+#     UserListView,
+#     UserDetailView,
+#     validate_access_token,
+# )
 
 urlpatterns = [
+    path(
+        "user-hierarchy/<int:pk>/",
+        UserHierarchyView.as_view(),
+        name="user-hierarchy-detail",
+    ),
+    path(
+        "user-children/<int:pk>/",
+        UserChildrenListView.as_view(),
+        name="user-children-list",
+    ),
     path("webhook/", views.whatsapp_webhook, name="whatsapp_webhook"),
     path("phone-numbers/", PhoneNumberList.as_view(), name="phone-number-list"),
     path("users/", UserListView.as_view(), name="user-list"),
@@ -86,9 +99,20 @@ urlpatterns = [
         views.upload_credentials,
         name="upload_credentials",
     ),
+    path(
+        "user/<int:user_id>/view-referral/",
+        ViewReferralStringAPIView.as_view(),
+        name="api_view_referral_string",
+    ),
+    # path(
+    #     "user/<int:user_id>/edit-referral/",
+    #     EditReferralStringAPIView.as_view(),
+    #     name="api_edit_referral_string",
+    # ),
     path("upload/", PhoneNumberUpload.as_view(), name="upload_phone_numbers"),
     path("register/", UserRegistrationView.as_view(), name="user_registration"),
     path("login/", UserLoginView.as_view(), name="user_login"),
+    path("validate-access-token/", validate_access_token, name="validate_access_token"),
     path("", views.index, name="index"),
     path("privacy/", views.privacy, name="privacy"),
 ]

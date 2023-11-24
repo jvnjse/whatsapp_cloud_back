@@ -2,38 +2,68 @@ from rest_framework import serializers
 from .models import PhoneNumber, CustomUser
 import random
 import string
-from django.core.mail import send_mail
+from django.core.mail import send_mail, EmailMultiAlternatives
+from django.template.loader import render_to_string
+from django.utils.html import strip_tags
+from django.conf import settings
 
 
 class CustomUserSerializer(serializers.ModelSerializer):
+    referral_string = serializers.CharField(write_only=True, required=False)
+
     class Meta:
         model = CustomUser
-        fields = ("id", "email", "is_active", "is_staff")
+        fields = ("id", "email", "is_active", "is_staff", "referral_string")
         # extra_kwargs = {"password": {"write_only": True}}
 
     def create(self, validated_data):
         email = validated_data.get("email")
+        referral_string = validated_data.get("referral_string")
 
-        # Generate a random password
         password = "".join(
             random.choice(string.ascii_letters + string.digits) for _ in range(6)
         )
 
-        # Create the user instance with the email and set the password
         instance = self.Meta.model(email=email)
         instance.set_password(password)
-        instance.save()
 
-        # Send the random password to the provided email address
-        send_mail(
-            subject="Your New Account Password",
-            message=f"Your password is: {password}",
-            from_email="jeevanjose2016@gmail.com",  # Change this to your email address
-            recipient_list=[email],
-            fail_silently=False,  # Set to True to suppress errors if email fails to send
+        if referral_string:
+            try:
+                parent_user = CustomUser.objects.get(referral_string=referral_string)
+                instance.parent_user = parent_user
+                instance.save()
+            except CustomUser.DoesNotExist:
+                pass
+        my_subject = "Whatsapp Module Generated Password"
+        context = {
+            "password": password,
+        }
+        recipient_list = [email]
+        html_message = render_to_string("password.html", context)
+        plain_message = strip_tags(html_message)
+        message = EmailMultiAlternatives(
+            subject=my_subject,
+            body=plain_message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=recipient_list,
         )
-
+        message.attach_alternative(html_message, "text/html")
+        message.send()
+        # send_mail(
+        #     subject="Your New Account Password",
+        #     message=f"Your password is: {password}",
+        #     from_email="jeevanjose2016@gmail.com",
+        #     recipient_list=[email],
+        #     fail_silently=False,
+        # )
+        instance.save()
         return instance
+
+
+class ReferalStringSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomUser
+        fields = ["id", "referral_string"]
 
 
 class UserLoginSerializer(serializers.Serializer):
@@ -95,7 +125,7 @@ class WhatsAppBulkMessageImageSerializer(serializers.Serializer):
     numbers = serializers.ListField(child=serializers.CharField(max_length=20))
     template_name = serializers.CharField()
     image_link = serializers.CharField()
-    user_id = serializers.IntegerField()
+    user_id = serializers.CharField()
 
 
 class MessageTemplateSerializer(serializers.Serializer):

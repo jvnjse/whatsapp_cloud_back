@@ -4,6 +4,12 @@ from django.contrib.auth.models import (
     BaseUserManager,
     PermissionsMixin,
 )
+import random
+import string
+
+
+def generate_referral_string():
+    return "".join(random.choices(string.ascii_uppercase + string.digits, k=8))
 
 
 class CustomUserManager(BaseUserManager):
@@ -26,6 +32,19 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(unique=True)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
+    referral_string = models.CharField(
+        max_length=8,
+        unique=True,
+        default=generate_referral_string,
+    )
+    parent_user = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.SET_NULL
+    )
+    is_distributor = models.BooleanField(default=False)
+
+    # def update_referral_string(self):
+    #     self.referral_string = generate_referral_string()
+    #     self.save()
 
     USERNAME_FIELD = "email"
 
@@ -37,9 +56,15 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     )
 
 
+# @receiver(post_save, sender=CustomUser)
+# def update_referral_string(sender, instance, created, **kwargs):
+#     if created:
+#         instance.update_referral_string()
+
+
 class PhoneNumber(models.Model):
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
-    number = models.CharField(max_length=20, unique=True)
+    number = models.CharField(max_length=20)
 
     def __str__(self):
         return str(self.number)
