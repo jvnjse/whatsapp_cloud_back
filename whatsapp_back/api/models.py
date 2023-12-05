@@ -78,3 +78,15 @@ class WhatsappCredential(models.Model):
 
     def __str__(self):
         return str(self.user)
+
+
+class Template(models.Model):
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    template_name = models.CharField(max_length=30)
+    template_image = models.ImageField(upload_to="template_image", null=True)
+
+    def __str__(self):
+        return str(self.template_name)
+
+    class Meta:
+        unique_together = ("user", "template_name")

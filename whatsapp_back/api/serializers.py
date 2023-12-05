@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import PhoneNumber, CustomUser
+from .models import PhoneNumber, CustomUser, Template
 import random
 import string
 from django.core.mail import send_mail, EmailMultiAlternatives
@@ -104,8 +104,13 @@ class PhoneNumberSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
-class ImageUploadSerializer(serializers.Serializer):
-    image_file = serializers.FileField()
+class ImageUploadSerializer(serializers.ModelSerializer):
+    # template_name = serializers.CharField(max_length=30)
+    # template_image = serializers.ImageField(use_url=False)
+
+    class Meta:
+        model = Template
+        fields = ["template_name", "template_image"]
 
 
 class CredentialsSerializer(serializers.Serializer):

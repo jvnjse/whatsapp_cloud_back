@@ -1,6 +1,8 @@
 from django.urls import path
 from . import views
 from .views import *
+from django.conf import settings
+from django.conf.urls.static import static
 
 # from .views import (
 #     PhoneNumberUpload,
@@ -115,4 +117,4 @@ urlpatterns = [
     path("validate-access-token/", validate_access_token, name="validate_access_token"),
     path("", views.index, name="index"),
     path("privacy/", views.privacy, name="privacy"),
-]
+] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
