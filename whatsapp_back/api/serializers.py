@@ -13,7 +13,14 @@ class CustomUserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CustomUser
-        fields = ("id", "email", "is_active", "is_staff", "referral_string")
+        fields = (
+            "id",
+            "email",
+            "is_active",
+            "is_staff",
+            "is_distributor",
+            "referral_string",
+        )
         # extra_kwargs = {"password": {"write_only": True}}
 
     def create(self, validated_data):
@@ -95,6 +102,7 @@ class ExcelSerializer(serializers.Serializer):
 class ExcelImageSerializer(serializers.Serializer):
     excel_file = serializers.FileField()
     template_name = serializers.CharField(required=False)
+    user_id = serializers.IntegerField()
     image_link = serializers.CharField()
 
 

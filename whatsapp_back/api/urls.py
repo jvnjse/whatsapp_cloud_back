@@ -117,4 +117,5 @@ urlpatterns = [
     path("validate-access-token/", validate_access_token, name="validate_access_token"),
     path("", views.index, name="index"),
     path("privacy/", views.privacy, name="privacy"),
+    path("pdf/", views.pdf, name="pdf"),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

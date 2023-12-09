@@ -517,14 +517,13 @@ def excel_sent_message_images(request):
                                 "parameters": [
                                     {
                                         "type": "image",
-                                        "image": {"link": image_link},
+                                        "image": {
+                                            # "link": image_url
+                                            "link": "https://i.ibb.co/QcpC8WQ/bgnotfound.png"
+                                        },
                                     }
                                 ],
-                            },
-                            {
-                                "type": "body",
-                                "parameters": [{"type": "text", "text": "TEXT-STRING"}],
-                            },
+                            }
                         ],
                         "language": {"code": "en"},
                     },
@@ -697,16 +696,25 @@ def send_whatsapp_bulk_messages_images(request):
                     "name": template_name,
                     "components": [
                         {
-                            "type": "header",
-                            # "format": "IMAGE",
-                            # "example": {"header_handle": image_link},
-                            "parameters": [
-                                {
-                                    "type": "image",
-                                    "image": {"link": image_link},
-                                }
-                            ],
+                            "type": "HEADER",
+                            # "format": "TEXT",
+                            "parameters": [{"type": "text", "text": "MANU"}]
+                            # "example": {"header_text": ["Jeevan"]},
                         }
+                        # {
+                        #     "type": "header",
+                        #     # "format": "IMAGE",
+                        #     # "example": {"header_handle": image_link},
+                        #     "parameters": [
+                        #         {
+                        #             "type": "image",
+                        #             "image": {
+                        #                 # "link": image_link
+                        #                 "link": "https://i.ibb.co/QcpC8WQ/bgnotfound.png"
+                        #             },
+                        #         }
+                        #     ],
+                        # }
                     ],
                     "language": {"code": "en"},
                 },
@@ -850,7 +858,8 @@ def send_whatsapp_model_bulk_messages_images(request):
                                 {
                                     "type": "image",
                                     "image": {
-                                        "link": f"{domain_url}{template_instance.template_image}"
+                                        # "link": image_url
+                                        "link": "https://i.ibb.co/QcpC8WQ/bgnotfound.png"
                                     },
                                 }
                             ],
@@ -1354,3 +1363,37 @@ def whatsapp_webhook(request):
 #         return JsonResponse({"error": "Invalid JSON data"}, status=400)
 #     except requests.exceptions.RequestException as e:
 #         return JsonResponse({"error": str(e)}, status=500)
+
+# from django.core.mail import send_mail, EmailMultiAlternatives
+# from django.template.loader import render_to_string
+# from django.utils.html import strip_tags
+# from django.conf import settings
+# from io import BytesIO
+# from xhtml2pdf import pisa
+
+
+# def pdf(request):
+#     if request.method == "POST":
+#         my_subject = "Whatsapp Module Generated Password"
+
+
+#         recipient_list = ["jeevanjose2016@gmail.com"]#add ur email
+#         html_message = render_to_string("password.html")#add ur html
+#         plain_message = strip_tags(html_message)
+#         pdf_content = BytesIO()
+#         pisa_document = pisa.CreatePDF(
+#             BytesIO(html_message.encode("UTF-8")), pdf_content
+#         )
+#         pdf_content.seek(0)
+#         message = EmailMultiAlternatives(
+#             subject=my_subject,
+#             body="plain_message",
+#             from_email=settings.DEFAULT_FROM_EMAIL,
+#             to=recipient_list,
+#         )
+#         message.attach("filename", pdf_content.read(), "application/pdf")
+#         message.send()
+
+#         return HttpResponse("SUccess")
+#     else:
+#         return HttpResponse("ERROR")
