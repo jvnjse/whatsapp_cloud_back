@@ -473,6 +473,83 @@ def excel_sent_message(request):
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+def excel_personalised_sent_message(request):
+    try:
+        serializer = ExcelSerializer(data=request.data)
+
+        if serializer.is_valid():
+            excel_file = serializer.validated_data["excel_file"]
+            template_name = serializer.validated_data["template_name"]
+            user_id = serializer.validated_data["user_id"]
+            get_credential = get_credentials(user_id)
+            phone_number_id = get_credential[0]["phone_number_id"]
+            # business_id = get_credential[0]["whatsapp_business_id"]
+            bearer_token = get_credential[0]["permanent_access_token"]
+
+            workbook = load_workbook(excel_file, read_only=True)
+            worksheet = workbook.active
+            results = []
+
+            for row in worksheet.iter_rows(values_only=True):
+                raw_number = str(row[1])
+                name = str(row[0])
+                print(name, raw_number)
+                # replace 0 and add +91
+                if raw_number.startswith("0"):
+                    raw_number = "+91" + raw_number[1:]
+                # if no +91 add +91
+                if not raw_number.startswith("+91"):
+                    raw_number = "+91" + raw_number
+                # model save
+                # PhoneNumber.objects.get_or_create(number=raw_number)
+                PhoneNumber.objects.get_or_create(number=raw_number, user_id=user_id)
+
+                data = {
+                    "messaging_product": "whatsapp",
+                    "recipient_type": "individual",
+                    "to": raw_number,
+                    "type": "template",
+                    "template": {
+                        "name": template_name,
+                        "components": [
+                            {
+                                "type": "HEADER",
+                                # "format": "TEXT",
+                                "parameters": [{"type": "text", "text": name}]
+                                # "example": {"header_text": ["Jeevan"]},
+                            }
+                        ],
+                        "language": {"code": "en"},
+                    },
+                }
+
+                url = (
+                    "https://graph.facebook.com/v18.0/" + phone_number_id + "/messages"
+                )
+                headers = {
+                    "Authorization": "Bearer " + bearer_token,
+                    "Content-Type": "application/json",
+                }
+
+                try:
+                    response = requests.post(url, headers=headers, json=data)
+                    response_data = response.json()
+                    results.append(response_data)
+
+                except json.JSONDecodeError:
+                    return JsonResponse({"error": "Invalid JSON data"}, status=400)
+            return Response(
+                {"message": response_data},
+                status=status.HTTP_201_CREATED,
+            )
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def excel_sent_message_images(request):
     try:
         serializer = ExcelImageSerializer(data=request.data)
@@ -695,26 +772,26 @@ def send_whatsapp_bulk_messages_images(request):
                 "template": {
                     "name": template_name,
                     "components": [
-                        {
-                            "type": "HEADER",
-                            # "format": "TEXT",
-                            "parameters": [{"type": "text", "text": "MANU"}]
-                            # "example": {"header_text": ["Jeevan"]},
-                        }
                         # {
-                        #     "type": "header",
-                        #     # "format": "IMAGE",
-                        #     # "example": {"header_handle": image_link},
-                        #     "parameters": [
-                        #         {
-                        #             "type": "image",
-                        #             "image": {
-                        #                 # "link": image_link
-                        #                 "link": "https://i.ibb.co/QcpC8WQ/bgnotfound.png"
-                        #             },
-                        #         }
-                        #     ],
+                        #     "type": "HEADER",
+                        #     # "format": "TEXT",
+                        #     "parameters": [{"type": "text", "text": "MANU"}]
+                        #     # "example": {"header_text": ["Jeevan"]},
                         # }
+                        {
+                            "type": "header",
+                            # "format": "IMAGE",
+                            # "example": {"header_handle": image_link},
+                            "parameters": [
+                                {
+                                    "type": "image",
+                                    "image": {
+                                        # "link": image_link
+                                        "link": "https://i.ibb.co/QcpC8WQ/bgnotfound.png"
+                                    },
+                                }
+                            ],
+                        }
                     ],
                     "language": {"code": "en"},
                 },
@@ -1002,6 +1079,12 @@ def create_text_template(request):
                 "category": "MARKETING",
                 "language": "en",
                 "components": [
+                    # {
+                    #     "type": "HEADER",
+                    #     "format": "TEXT",
+                    #     "text": "Our {{1}} is on!",
+                    #     "example": {"header_text": ["Sample Text"]},
+                    # },
                     {"type": "HEADER", "format": "TEXT", "text": header_text},
                     {"type": "BODY", "text": body_text},
                     {"type": "FOOTER", "text": footer_text},
@@ -1195,6 +1278,220 @@ def create_text_template_button_call(request):
                 "category": "MARKETING",
                 "components": [
                     {"type": "HEADER", "format": "TEXT", "text": header_text},
+                    {
+                        "type": "BODY",
+                        "text": body_text,
+                    },
+                    {"type": "FOOTER", "text": footer_text},
+                    {
+                        "type": "BUTTONS",
+                        "buttons": [
+                            {
+                                "type": "PHONE_NUMBER",
+                                "text": button_text,
+                                "phone_number": button_url,
+                            }
+                        ],
+                    },
+                ],
+                "language": "en",
+            }
+        )
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + bearer_token,
+        }
+
+        response = requests.post(facebook_api_url, data=post_data, headers=headers)
+        response_data = response.json()
+
+        if response.status_code == status.HTTP_200_OK:
+            return Response(
+                {"message": response_data},
+                status=status.HTTP_200_OK,
+            )
+        else:
+            return Response(
+                {"message": response_data},
+                status=response.status_code,
+            )
+    else:
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def create_text_template_personalised(request):
+    user_id = request.GET.get("user_id")
+    get_credential = get_credentials(user_id)
+    # phone_number_id = get_credential[0]["phone_number_id"]
+    business_id = get_credential[0]["whatsapp_business_id"]
+    bearer_token = get_credential[0]["permanent_access_token"]
+    facebook_api_url = (
+        "https://graph.facebook.com/v18.0/" + business_id + "/message_templates"
+    )
+    serializer = MessageTextTemplateSerializer(data=request.data)
+
+    if serializer.is_valid():
+        data = serializer.validated_data
+        template_name = data.get("template_name")
+        header_text = data.get("header_text")
+        body_text = data.get("body_text")
+        footer_text = data.get("footer_text")
+
+        post_data = json.dumps(
+            {
+                "name": template_name,
+                "category": "MARKETING",
+                "language": "en",
+                "components": [
+                    {
+                        "type": "HEADER",
+                        "format": "TEXT",
+                        "text": header_text,
+                        "example": {"header_text": ["Sample Text"]},
+                    },
+                    # {"type": "HEADER", "format": "TEXT", "text": header_text},
+                    {"type": "BODY", "text": body_text},
+                    {"type": "FOOTER", "text": footer_text},
+                ],
+            }
+        )
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + bearer_token,
+        }
+
+        response = requests.post(facebook_api_url, data=post_data, headers=headers)
+        response_data = response.json()
+
+        if response.status_code == status.HTTP_200_OK:
+            return Response(
+                {"message": response_data},
+                status=status.HTTP_200_OK,
+            )
+        else:
+            return Response(
+                {"message": response_data},
+                status=response.status_code,
+            )
+    else:
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def create_text_template_button_site_personalised(request):
+    user_id = request.GET.get("user_id")
+    get_credential = get_credentials(user_id)
+    # phone_number_id = get_credential[0]["phone_number_id"]
+    business_id = get_credential[0]["whatsapp_business_id"]
+    bearer_token = get_credential[0]["permanent_access_token"]
+
+    facebook_api_url = (
+        "https://graph.facebook.com/v18.0/" + business_id + "/message_templates"
+    )
+    serializer = MessageTemplateSerializer(data=request.data)
+
+    if serializer.is_valid():
+        data = serializer.validated_data
+        template_name = data.get("template_name")
+        header_text = data.get("header_text")
+        body_text = data.get("body_text")
+        footer_text = data.get("footer_text")
+        button_type = data.get("button_type")
+        button_text = data.get("button_text")
+        button_url = data.get("button_url")
+
+        post_data = json.dumps(
+            {
+                "name": template_name,
+                "category": "MARKETING",
+                "components": [
+                    {
+                        "type": "HEADER",
+                        "format": "TEXT",
+                        "text": header_text,
+                        "example": {"header_text": ["Sample Text"]},
+                    },
+                    {
+                        "type": "BODY",
+                        "text": body_text,
+                    },
+                    {"type": "FOOTER", "text": footer_text},
+                    {
+                        "type": "BUTTONS",
+                        "buttons": [
+                            {
+                                "type": "URL",
+                                "text": button_text,
+                                "url": button_url,
+                            }
+                        ],
+                    },
+                ],
+                "language": "en",
+            }
+        )
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + bearer_token,
+        }
+
+        response = requests.post(facebook_api_url, data=post_data, headers=headers)
+        response_data = response.json()
+
+        if response.status_code == status.HTTP_200_OK:
+            return Response(
+                {"message": response_data},
+                status=status.HTTP_200_OK,
+            )
+        else:
+            return Response(
+                {"message": response_data},
+                status=response.status_code,
+            )
+    else:
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def create_text_template_button_call_personalised(request):
+    user_id = request.GET.get("user_id")
+    get_credential = get_credentials(user_id)
+    # phone_number_id = get_credential[0]["phone_number_id"]
+    business_id = get_credential[0]["whatsapp_business_id"]
+    bearer_token = get_credential[0]["permanent_access_token"]
+
+    facebook_api_url = (
+        "https://graph.facebook.com/v18.0/" + business_id + "/message_templates"
+    )
+    serializer = MessageTemplateSerializer(data=request.data)
+
+    if serializer.is_valid():
+        data = serializer.validated_data
+        template_name = data.get("template_name")
+        header_text = data.get("header_text")
+        body_text = data.get("body_text")
+        footer_text = data.get("footer_text")
+        button_type = data.get("button_type")
+        button_text = data.get("button_text")
+        button_url = data.get("button_url")
+
+        post_data = json.dumps(
+            {
+                "name": template_name,
+                "category": "MARKETING",
+                "components": [
+                    {
+                        "type": "HEADER",
+                        "format": "TEXT",
+                        "text": header_text,
+                        "example": {"header_text": ["Sample Text"]},
+                    },
                     {
                         "type": "BODY",
                         "text": body_text,

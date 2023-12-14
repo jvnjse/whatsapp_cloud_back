@@ -67,6 +67,21 @@ urlpatterns = [
         name="create_text_template_button_call",
     ),
     path(
+        "post_template/text/personalised",
+        views.create_text_template_personalised,
+        name="create_text_template_personalised",
+    ),
+    path(
+        "post_template/site/personalised",
+        views.create_text_template_button_site_personalised,
+        name="create_text_template_button_site_personalised",
+    ),
+    path(
+        "post_template/call/personalised",
+        views.create_text_template_button_call_personalised,
+        name="create_text_template_button_call_personalised",
+    ),
+    path(
         "post_template/image",
         views.create_image_template,
         name="create_image_template",
@@ -75,6 +90,11 @@ urlpatterns = [
         "upload/sent",
         views.excel_sent_message,
         name="excel_sent_message",
+    ),
+    path(
+        "upload/sent/personalised",
+        views.excel_personalised_sent_message,
+        name="excel_personalised_sent_message",
     ),
     path(
         "upload/sent/images",
@@ -117,5 +137,5 @@ urlpatterns = [
     path("validate-access-token/", validate_access_token, name="validate_access_token"),
     path("", views.index, name="index"),
     path("privacy/", views.privacy, name="privacy"),
-    path("pdf/", views.pdf, name="pdf"),
+    # path("pdf/", views.pdf, name="pdf"),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
