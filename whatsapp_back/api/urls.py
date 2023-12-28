@@ -87,6 +87,11 @@ urlpatterns = [
         name="create_image_template",
     ),
     path(
+        "post_template/image/personalised",
+        views.create_image_template_personalised,
+        name="create_image_template_personalised",
+    ),
+    path(
         "upload/sent",
         views.excel_sent_message,
         name="excel_sent_message",
@@ -100,6 +105,11 @@ urlpatterns = [
         "upload/sent/images",
         views.excel_sent_message_images,
         name="excel_sent_message_images",
+    ),
+    path(
+        "upload/sent/images/personalised",
+        views.excel_sent_message_images_personalised,
+        name="excel_sent_message_images_personalised",
     ),
     path(
         "upload/data",
@@ -137,5 +147,6 @@ urlpatterns = [
     path("validate-access-token/", validate_access_token, name="validate_access_token"),
     path("", views.index, name="index"),
     path("privacy/", views.privacy, name="privacy"),
+    path("schedule/", views.schedule_api_call, name="schedule_api_call"),
     # path("pdf/", views.pdf, name="pdf"),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

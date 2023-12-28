@@ -427,14 +427,14 @@ def excel_sent_message(request):
 
             for row in worksheet.iter_rows(values_only=True):
                 raw_number = str(row[0])
+                print(raw_number)
                 # replace 0 and add +91
                 if raw_number.startswith("0"):
                     raw_number = "+91" + raw_number[1:]
                 # if no +91 add +91
                 if not raw_number.startswith("+91"):
                     raw_number = "+91" + raw_number
-                # model save
-                # PhoneNumber.objects.get_or_create(number=raw_number)
+
                 PhoneNumber.objects.get_or_create(number=raw_number, user_id=user_id)
 
                 data = {
@@ -461,10 +461,10 @@ def excel_sent_message(request):
 
                 except json.JSONDecodeError:
                     return JsonResponse({"error": "Invalid JSON data"}, status=400)
-                return Response(
-                    {"message": "Phone numbers imported successfully"},
-                    status=status.HTTP_201_CREATED,
-                )
+            return Response(
+                {"message": "Phone numbers imported successfully"},
+                status=status.HTTP_201_CREATED,
+            )
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
@@ -570,6 +570,8 @@ def excel_sent_message_images(request):
 
             for row in worksheet.iter_rows(values_only=True):
                 raw_number = str(row[0])
+                print(raw_number)
+
                 # replace 0 and add +91
                 if raw_number.startswith("0"):
                     raw_number = "+91" + raw_number[1:]
@@ -595,8 +597,7 @@ def excel_sent_message_images(request):
                                     {
                                         "type": "image",
                                         "image": {
-                                            # "link": image_url
-                                            "link": "https://i.ibb.co/QcpC8WQ/bgnotfound.png"
+                                            "link": "https://i.ibb.co/23hxBhg/image.png"
                                         },
                                     }
                                 ],
@@ -622,10 +623,101 @@ def excel_sent_message_images(request):
 
                 except json.JSONDecodeError:
                     return JsonResponse({"error": "Invalid JSON data"}, status=400)
-                return Response(
-                    {"message": "Phone numbers imported successfully"},
-                    status=status.HTTP_201_CREATED,
+            return Response(
+                {"message": results},
+                status=status.HTTP_201_CREATED,
+            )
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def excel_sent_message_images_personalised(request):
+    try:
+        serializer = ExcelImageSerializer(data=request.data)
+
+        if serializer.is_valid():
+            excel_file = serializer.validated_data["excel_file"]
+            template_name = serializer.validated_data["template_name"]
+            user_id = serializer.validated_data["user_id"]
+            image_link = serializer.validated_data["image_link"]
+            get_credential = get_credentials(user_id)
+            phone_number_id = get_credential[0]["phone_number_id"]
+            # business_id = get_credential[0]["whatsapp_business_id"]
+            bearer_token = get_credential[0]["permanent_access_token"]
+
+            workbook = load_workbook(excel_file, read_only=True)
+            worksheet = workbook.active
+            results = []
+
+            for row in worksheet.iter_rows(values_only=True):
+                raw_number = str(row[1])
+                name = str(row[0])
+                print(name)
+                # replace 0 and add +91
+                if raw_number.startswith("0"):
+                    raw_number = "+91" + raw_number[1:]
+                # if no +91 add +91
+                if not raw_number.startswith("+91"):
+                    raw_number = "+91" + raw_number
+                # model save
+                # PhoneNumber.objects.get_or_create(number=raw_number)
+                PhoneNumber.objects.get_or_create(number=raw_number, user_id=user_id)
+
+                data = {
+                    "messaging_product": "whatsapp",
+                    "recipient_type": "individual",
+                    "to": raw_number,
+                    "type": "template",
+                    "template": {
+                        "name": template_name,
+                        "components": [
+                            {
+                                "type": "HEADER",
+                                # "format": "IMAGE",
+                                "parameters": [
+                                    {
+                                        "type": "image",
+                                        "image": {
+                                            # "link": image_link
+                                            "link": "https://i.ibb.co/23hxBhg/image.png"
+                                            # "link": "https://i.ibb.co/bKz8FX5/Whats-App-Image-2023-12-07-at-22-28-36-f83821e0.jpg"
+                                        },
+                                    }
+                                ],
+                            },
+                            {
+                                "type": "body",
+                                "parameters": [{"type": "text", "text": name}],
+                            },
+                        ],
+                        "language": {"code": "en"},
+                    },
+                }
+                # print(data)
+
+                url = (
+                    "https://graph.facebook.com/v18.0/" + phone_number_id + "/messages"
                 )
+                headers = {
+                    "Authorization": "Bearer " + bearer_token,
+                    "Content-Type": "application/json",
+                }
+
+                try:
+                    response = requests.post(url, headers=headers, json=data)
+                    response_data = response.json()
+                    results.append(response_data)
+
+                except json.JSONDecodeError:
+                    return JsonResponse({"error": "Invalid JSON data"}, status=400)
+            return Response(
+                {"message": results},
+                status=status.HTTP_201_CREATED,
+            )
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
@@ -639,6 +731,8 @@ def excel_upload_message(request):
         serializer = ExcelSerializer(data=request.data)
 
         if serializer.is_valid():
+            print("raw_number")
+
             excel_file = serializer.validated_data["excel_file"]
             user_id = serializer.validated_data["user_id"]
 
@@ -648,6 +742,8 @@ def excel_upload_message(request):
 
             for row in worksheet.iter_rows(values_only=True):
                 raw_number = str(row[0])
+                print(raw_number)
+                print("raw_number")
                 # replace 0 and add +91
                 if raw_number.startswith("0"):
                     raw_number = "+91" + raw_number[1:]
@@ -787,7 +883,8 @@ def send_whatsapp_bulk_messages_images(request):
                                     "type": "image",
                                     "image": {
                                         # "link": image_link
-                                        "link": "https://i.ibb.co/QcpC8WQ/bgnotfound.png"
+                                        # "link": "https://i.ibb.co/QcpC8WQ/bgnotfound.png"
+                                        "link": "https://i.ibb.co/23hxBhg/image.png"
                                     },
                                 }
                             ],
@@ -935,8 +1032,7 @@ def send_whatsapp_model_bulk_messages_images(request):
                                 {
                                     "type": "image",
                                     "image": {
-                                        # "link": image_url
-                                        "link": "https://i.ibb.co/QcpC8WQ/bgnotfound.png"
+                                        "link": "https://i.ibb.co/23hxBhg/image.png"
                                     },
                                 }
                             ],
@@ -1085,7 +1181,11 @@ def create_text_template(request):
                     #     "text": "Our {{1}} is on!",
                     #     "example": {"header_text": ["Sample Text"]},
                     # },
-                    {"type": "HEADER", "format": "TEXT", "text": header_text},
+                    {
+                        "type": "HEADER",
+                        "format": "TEXT",
+                        "text": header_text,
+                    },
                     {"type": "BODY", "text": body_text},
                     {"type": "FOOTER", "text": footer_text},
                 ],
@@ -1178,6 +1278,74 @@ def create_image_template(request):
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+def create_image_template_personalised(request):
+    user_id = request.GET.get("user_id")
+    get_credential = get_credentials(user_id)
+    # phone_number_id = get_credential[0]["phone_number_id"]
+    business_id = get_credential[0]["whatsapp_business_id"]
+    bearer_token = get_credential[0]["permanent_access_token"]
+
+    facebook_api_url = (
+        "https://graph.facebook.com/v18.0/" + business_id + "/message_templates"
+    )
+    serializer = MessageTemplateSerializer(data=request.data)
+
+    if serializer.is_valid():
+        data = serializer.validated_data
+        template_name = data.get("template_name")
+        header_text = data.get("header_text")
+        body_text = data.get("body_text")
+        footer_text = data.get("footer_text")
+        print(body_text)
+        print(header_text)
+
+        post_data = json.dumps(
+            {
+                "name": template_name,
+                "category": "MARKETING",
+                "language": "en",
+                "components": [
+                    {
+                        "type": "HEADER",
+                        "format": "IMAGE",
+                        "example": {"header_handle": header_text},
+                    },
+                    {
+                        "type": "BODY",
+                        # "text": "Thank you for your order, {{1}}! Your confirmation number is {{2}}. If you have any questions, please use the buttons below to contact support. Thank you for being a customer!",
+                        # "example": {"body_text": [["Pablo", "860198-230332"]]}
+                        "text": f"{body_text}",
+                        "example": {"body_text": [["Sample"]]},
+                    },
+                    {"type": "FOOTER", "text": footer_text},
+                ],
+            }
+        )
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + bearer_token,
+        }
+
+        response = requests.post(facebook_api_url, data=post_data, headers=headers)
+        response_data = response.json()
+
+        if response.status_code == status.HTTP_200_OK:
+            return Response(
+                {"message": response_data},
+                status=status.HTTP_200_OK,
+            )
+        else:
+            return Response(
+                {"message": response_data},
+                status=response.status_code,
+            )
+    else:
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def create_text_template_button_site(request):
     user_id = request.GET.get("user_id")
     get_credential = get_credentials(user_id)
@@ -1205,7 +1373,11 @@ def create_text_template_button_site(request):
                 "name": template_name,
                 "category": "MARKETING",
                 "components": [
-                    {"type": "HEADER", "format": "TEXT", "text": header_text},
+                    {
+                        "type": "HEADER",
+                        "format": "TEXT",
+                        "text": header_text,
+                    },
                     {
                         "type": "BODY",
                         "text": body_text,
@@ -1379,6 +1551,7 @@ def create_text_template_personalised(request):
             )
     else:
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
@@ -1558,6 +1731,27 @@ def whatsapp_webhook(request):
                 return HttpResponse(status=403)
 
     return HttpResponse("OK", content_type="text/plain")
+
+
+from datetime import datetime, timedelta
+from .tasks import make_api_call
+
+
+@csrf_exempt
+def schedule_api_call(request):
+    api_data = request.POST.get("api_data")
+    scheduled_time_str = str(request.POST.get("scheduled_time"))
+    print(scheduled_time_str)
+
+    scheduled_time = datetime.strptime(scheduled_time_str, "%Y-%m-%d %H:%M:%S")
+
+    task = ScheduledAPICall.objects.create(
+        api_data=api_data, scheduled_time=scheduled_time
+    )
+
+    make_api_call.apply_async(args=[task.id], eta=scheduled_time)
+
+    return JsonResponse({"privacy & Policy": "any message content."})
 
 
 # @csrf_exempt

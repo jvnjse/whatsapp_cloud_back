@@ -90,3 +90,8 @@ class Template(models.Model):
 
     class Meta:
         unique_together = ("user", "template_name")
+
+
+class ScheduledAPICall(models.Model):
+    api_data = models.TextField()
+    scheduled_time = models.DateTimeField()
