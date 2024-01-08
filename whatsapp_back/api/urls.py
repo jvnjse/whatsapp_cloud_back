@@ -27,7 +27,7 @@ urlpatterns = [
     ),
     path("webhook/", views.whatsapp_webhook, name="whatsapp_webhook"),
     path("phone-numbers/", PhoneNumberList.as_view(), name="phone-number-list"),
-    path("users/", UserListView.as_view(), name="user-list"),
+    path("users/", UserListView2.as_view(), name="user-list"),
     path("users/<int:pk>/", UserDetailView.as_view(), name="user-list-detail"),
     path(
         "sent-messages/",
@@ -148,5 +148,9 @@ urlpatterns = [
     path("", views.index, name="index"),
     path("privacy/", views.privacy, name="privacy"),
     path("schedule/", views.schedule_api_call, name="schedule_api_call"),
-    # path("pdf/", views.pdf, name="pdf"),
+    path(
+        "user/schedule/",
+        ScheduleHelloView.as_view(),
+        name="api_chedulke",
+    ),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

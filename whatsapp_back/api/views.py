@@ -19,12 +19,20 @@ from .serializers import (
     MessageTextTemplateSerializer,
     ImageUploadSerializer,
     CustomUserSerializer,
+    CustomUserDetailSerializer,
     CredentialsSerializer,
     UserLoginSerializer,
     ReferalStringSerializer,
+    ScheduledAPISerializer,
 )
 from rest_framework_simplejwt.tokens import RefreshToken
-from .models import PhoneNumber, CustomUser, WhatsappCredential, Template
+from .models import (
+    PhoneNumber,
+    CustomUser,
+    WhatsappCredential,
+    Template,
+    ScheduledAPICall,
+)
 from openpyxl import load_workbook
 from decouple import config
 from django.contrib.auth import authenticate
@@ -167,16 +175,19 @@ class UserLoginView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class UserListView(ListAPIView):
-    queryset = CustomUser.objects.all()
-    serializer_class = CustomUserSerializer
+class UserListView2(APIView):
     permission_classes = [IsAdminUser]
+
+    def get(self, request, format=None):
+        users = CustomUser.objects.filter(is_staff="False")
+        serializer = CustomUserSerializer(users, many=True)
+        return Response(serializer.data)
 
 
 class UserDetailView(RetrieveUpdateAPIView):
-    queryset = CustomUser.objects.all()
-    serializer_class = CustomUserSerializer
     permission_classes = [IsAdminUser]
+    queryset = CustomUser.objects.all()
+    serializer_class = CustomUserDetailSerializer
 
 
 class UserChildrenListView(generics.ListAPIView):
@@ -500,6 +511,8 @@ def excel_personalised_sent_message(request):
                 # if no +91 add +91
                 if not raw_number.startswith("+91"):
                     raw_number = "+91" + raw_number
+
+                print(raw_number)
                 # model save
                 # PhoneNumber.objects.get_or_create(number=raw_number)
                 PhoneNumber.objects.get_or_create(number=raw_number, user_id=user_id)
@@ -663,57 +676,58 @@ def excel_sent_message_images_personalised(request):
                 # if no +91 add +91
                 if not raw_number.startswith("+91"):
                     raw_number = "+91" + raw_number
+
+                print(raw_number)
                 # model save
                 # PhoneNumber.objects.get_or_create(number=raw_number)
-                PhoneNumber.objects.get_or_create(number=raw_number, user_id=user_id)
+                # PhoneNumber.objects.get_or_create(number=raw_number, user_id=user_id)
 
-                data = {
-                    "messaging_product": "whatsapp",
-                    "recipient_type": "individual",
-                    "to": raw_number,
-                    "type": "template",
-                    "template": {
-                        "name": template_name,
-                        "components": [
-                            {
-                                "type": "HEADER",
-                                # "format": "IMAGE",
-                                "parameters": [
-                                    {
-                                        "type": "image",
-                                        "image": {
-                                            # "link": image_link
-                                            "link": "https://i.ibb.co/23hxBhg/image.png"
-                                            # "link": "https://i.ibb.co/bKz8FX5/Whats-App-Image-2023-12-07-at-22-28-36-f83821e0.jpg"
-                                        },
-                                    }
-                                ],
-                            },
-                            {
-                                "type": "body",
-                                "parameters": [{"type": "text", "text": name}],
-                            },
-                        ],
-                        "language": {"code": "en"},
-                    },
-                }
-                # print(data)
+                # data = {
+                #     "messaging_product": "whatsapp",
+                #     "recipient_type": "individual",
+                #     "to": raw_number,
+                #     "type": "template",
+                #     "template": {
+                #         "name": template_name,
+                #         "components": [
+                #             {
+                #                 "type": "HEADER",
+                #                 # "format": "IMAGE",
+                #                 "parameters": [
+                #                     {
+                #                         "type": "image",
+                #                         "image": {
+                #                             # "link": image_link
+                #                             "link": "https://i.ibb.co/GTmcbDg/386384270-632166208949549-651046045893776904-n.png"
+                #                         },
+                #                     }
+                #                 ],
+                #             },
+                #             {
+                #                 "type": "body",
+                #                 "parameters": [{"type": "text", "text": name}],
+                #             },
+                #         ],
+                #         "language": {"code": "en"},
+                #     },
+                # }
+                # # print(data)
 
-                url = (
-                    "https://graph.facebook.com/v18.0/" + phone_number_id + "/messages"
-                )
-                headers = {
-                    "Authorization": "Bearer " + bearer_token,
-                    "Content-Type": "application/json",
-                }
+                # url = (
+                #     "https://graph.facebook.com/v18.0/" + phone_number_id + "/messages"
+                # )
+                # headers = {
+                #     "Authorization": "Bearer " + bearer_token,
+                #     "Content-Type": "application/json",
+                # }
 
-                try:
-                    response = requests.post(url, headers=headers, json=data)
-                    response_data = response.json()
-                    results.append(response_data)
+                # try:
+                #     response = requests.post(url, headers=headers, json=data)
+                #     response_data = response.json()
+                #     results.append(response_data)
 
-                except json.JSONDecodeError:
-                    return JsonResponse({"error": "Invalid JSON data"}, status=400)
+                # except json.JSONDecodeError:
+                #     return JsonResponse({"error": "Invalid JSON data"}, status=400)
             return Response(
                 {"message": results},
                 status=status.HTTP_201_CREATED,
@@ -1733,25 +1747,77 @@ def whatsapp_webhook(request):
     return HttpResponse("OK", content_type="text/plain")
 
 
-from datetime import datetime, timedelta
-from .tasks import make_api_call
+from datetime import datetime, timedelta, timezone
+
+# from .tasks import make_api_call
+
+import pytz
+
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.utils import timezone
+from datetime import datetime
+from .tasks import schedule_hello
+
+
+class ScheduleHelloView(APIView):
+    def post(self, request, *args, **kwargs):
+        try:
+            # Get the datetime parameter from the request data
+            datetime_param = request.data.get("datetime_param")
+            print(timezone.now())
+
+            # Parse the datetime string into a datetime object
+            target_datetime = timezone.datetime.strptime(
+                datetime_param, "%Y-%m-%dT%H:%M:%S.%fZ"
+            )
+
+            # Schedule the task to print "hello" at the specified datetime
+            schedule_hello.apply_async((target_datetime,), eta=target_datetime)
+
+            return Response(
+                {"message": "Task scheduled successfully"}, status=status.HTTP_200_OK
+            )
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 
 @csrf_exempt
+@api_view(["POST"])
 def schedule_api_call(request):
-    api_data = request.POST.get("api_data")
-    scheduled_time_str = str(request.POST.get("scheduled_time"))
-    print(scheduled_time_str)
+    print("Request Data:", request.data)
 
-    scheduled_time = datetime.strptime(scheduled_time_str, "%Y-%m-%d %H:%M:%S")
+    scheduled_time_str = request.data.get("scheduled_time")
+    api_data = request.data.get("api_data")
 
-    task = ScheduledAPICall.objects.create(
-        api_data=api_data, scheduled_time=scheduled_time
-    )
+    if scheduled_time_str is not None:
+        try:
+            time = datetime.now(timezone.utc)
+            current_time_utc = datetime.utcnow().replace(tzinfo=pytz.UTC)
 
-    make_api_call.apply_async(args=[task.id], eta=scheduled_time)
+            # Convert UTC time to IST
+            ist = pytz.timezone("Asia/Kolkata")
+            print(time)
+            current_time_ist = current_time_utc.astimezone(ist)
+            current_time_ist_plus_one_minute = current_time_ist + timedelta(minutes=1)
+            print(current_time_ist)
+            print(current_time_ist_plus_one_minute)
 
-    return JsonResponse({"privacy & Policy": "any message content."})
+            task = ScheduledAPICall.objects.create(
+                api_data=api_data, scheduled_time=time
+            )
+
+            make_api_call.apply_async(
+                args=[task.id], eta=current_time_ist_plus_one_minute
+            )
+
+            return HttpResponse("API call scheduled successfully!")
+        except ValueError as e:
+            return HttpResponse(f"Error: {e}", status=400)
+    else:
+        return HttpResponse("Error: Scheduled time is required", status=400)
 
 
 # @csrf_exempt

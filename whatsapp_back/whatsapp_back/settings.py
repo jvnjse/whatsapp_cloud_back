@@ -73,8 +73,17 @@ TEMPLATES = [
     },
 ]
 
-CORS_ALLOW_ALL_ORIGINS = True
-CORS_ALLOWED_ORIGINS = ["http://localhost:3000", "https://infoxcore.com"]
+
+# CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+]
+CORS_ORIGIN_WHITELIST = (
+    "http://example.com",
+    "http://127.0.0.1:8000",
+    "http://localhost:3000",
+    "http://localhost:8000",
+)
 CORS_ALLOW_HEADERS = [
     "accept",
     "accept-encoding",
@@ -128,7 +137,9 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = "en-us"
 
+TIME_ZONE = "Asia/Kolkata"
 TIME_ZONE = "UTC"
+
 
 USE_I18N = True
 
@@ -199,3 +210,22 @@ EMAIL_HOST_PASSWORD = "uemprbywcrgmgavl"
 # EMAIL_USE_SSL = False
 # EMAIL_HOST_USER = "altostechnologies6@gmail.com"
 # EMAIL_HOST_PASSWORD = "jkdpqggohjsmhyay"
+# CELERY_BROKER_URL = "redis://localhost:6379/0"
+# CELERY_RESULT_BACKEND = "redis://localhost:6379/0"
+# CELERY_ACCEPT_CONTENT = ["json"]
+# CELERY_TASK_SERIALIZER = "json"
+# CELERY_RESULT_SERIALIZER = "json"
+# CELERY_TIMEZONE = "UTC"
+
+
+# settings.py
+# CELERY_BROKER_URL = "redis://localhost:6379/0"
+# CELERY_RESULT_BACKEND = "redis://localhost:6379/0"
+# CELERY_ACCEPT_CONTENT = ["json"]
+# CELERY_TASK_SERIALIZER = "json"
+# CELERY_RESULT_SERIALIZER = "json"
+# CELERY_TIMEZONE = "UTC"
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000
+
+
+# SECURE_SSL_REDIRECT = True

@@ -67,6 +67,23 @@ class CustomUserSerializer(serializers.ModelSerializer):
         return instance
 
 
+class CustomUserDetailSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomUser
+        fields = (
+            # "id",
+            # "email",
+            "is_active",
+            "is_staff",
+            "is_distributor",
+            "is_distributor",
+            "messaging_feature",
+            "excel_feature",
+            "image_feature",
+            "personalised_feature",
+        )
+
+
 class ReferalStringSerializer(serializers.ModelSerializer):
     class Meta:
         model = CustomUser
@@ -158,3 +175,8 @@ class MessageTextTemplateSerializer(serializers.Serializer):
     header_text = serializers.CharField(required=False)
     body_text = serializers.CharField(required=False)
     footer_text = serializers.CharField(required=False)
+
+
+class ScheduledAPISerializer(serializers.Serializer):
+    scheduled_time = serializers.DateTimeField()
+    api_data = serializers.CharField()

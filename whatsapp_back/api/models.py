@@ -30,8 +30,13 @@ class CustomUserManager(BaseUserManager):
 
 class CustomUser(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(unique=True)
-    is_active = models.BooleanField(default=True)
+    is_active = models.BooleanField(default=False)
     is_staff = models.BooleanField(default=False)
+    is_distributor = models.BooleanField(default=False)
+    messaging_feature = models.BooleanField(default=True)
+    excel_feature = models.BooleanField(default=False)
+    image_feature = models.BooleanField(default=False)
+    personalised_feature = models.BooleanField(default=False)
     referral_string = models.CharField(
         max_length=8,
         unique=True,
@@ -40,7 +45,6 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     parent_user = models.ForeignKey(
         "self", null=True, blank=True, on_delete=models.SET_NULL
     )
-    is_distributor = models.BooleanField(default=False)
 
     # def update_referral_string(self):
     #     self.referral_string = generate_referral_string()
