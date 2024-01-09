@@ -37,7 +37,7 @@ from openpyxl import load_workbook
 from decouple import config
 from django.contrib.auth import authenticate
 import urllib.parse
-import base64, os, random, string
+import base64, os, random, string,jwt
 
 my_token = "your_verify_token"
 bearer_token = config("TOKEN")
@@ -155,14 +155,23 @@ class UserLoginView(APIView):
 
             user = serializer.validated_data["user"]
             if user is not None and user.is_active:
-                print(user.is_active)
                 token = get_tokens_for_user(user)
+                payload = {
+                    "messaging_feature": user.messaging_feature,
+                    "excel_feature": user.excel_feature,
+                    "image_feature": user.image_feature,
+                    "personalised_feature": user.personalised_feature,
+                    }
+                secret_key = "your_secret_key"
+                feature_token = jwt.encode(payload, secret_key, algorithm="HS256")
+                print(feature_token)
                 return Response(
                     {
                         "token": token,
                         "user_id": user.id,
                         "is_manager": user.is_staff,
                         "is_active": user.is_active,
+                        "is_distributor": user.is_distributor,
                         "message": "Login successful",
                     },
                     status=status.HTTP_200_OK,
@@ -179,14 +188,23 @@ class UserListView2(APIView):
     permission_classes = [IsAdminUser]
 
     def get(self, request, format=None):
-        users = CustomUser.objects.filter(is_staff="False")
-        serializer = CustomUserSerializer(users, many=True)
-        return Response(serializer.data)
+        staff_false_users = CustomUser.objects.filter(is_staff=False)
+        distributor_true_users = CustomUser.objects.filter(is_distributor=True)
+
+        staff_false_serializer = CustomUserSerializer(staff_false_users, many=True)
+        distributor_true_serializer = CustomUserSerializer(distributor_true_users, many=True)
+
+        response_data = {
+            'staff_users': staff_false_serializer.data,
+            'distributor_users': distributor_true_serializer.data
+        }
+
+        return Response(response_data)
 
 
 class UserDetailView(RetrieveUpdateAPIView):
     permission_classes = [IsAdminUser]
-    queryset = CustomUser.objects.all()
+    queryset = CustomUser.objects.all() 
     serializer_class = CustomUserDetailSerializer
 
 
