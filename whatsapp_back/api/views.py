@@ -37,7 +37,7 @@ from openpyxl import load_workbook
 from decouple import config
 from django.contrib.auth import authenticate
 import urllib.parse
-import base64, os, random, string,jwt
+import base64, os, random, string, jwt
 
 my_token = "your_verify_token"
 bearer_token = config("TOKEN")
@@ -161,18 +161,19 @@ class UserLoginView(APIView):
                     "excel_feature": user.excel_feature,
                     "image_feature": user.image_feature,
                     "personalised_feature": user.personalised_feature,
-                    }
+                }
                 secret_key = "your_secret_key"
                 feature_token = jwt.encode(payload, secret_key, algorithm="HS256")
                 print(feature_token)
                 return Response(
                     {
+                        "message": "Login successful",
                         "token": token,
                         "user_id": user.id,
                         "is_manager": user.is_staff,
                         "is_active": user.is_active,
                         "is_distributor": user.is_distributor,
-                        "message": "Login successful",
+                        "feature_token": feature_token,
                     },
                     status=status.HTTP_200_OK,
                 )
@@ -192,11 +193,13 @@ class UserListView2(APIView):
         distributor_true_users = CustomUser.objects.filter(is_distributor=True)
 
         staff_false_serializer = CustomUserSerializer(staff_false_users, many=True)
-        distributor_true_serializer = CustomUserSerializer(distributor_true_users, many=True)
+        distributor_true_serializer = CustomUserSerializer(
+            distributor_true_users, many=True
+        )
 
         response_data = {
-            'staff_users': staff_false_serializer.data,
-            'distributor_users': distributor_true_serializer.data
+            "staff_users": staff_false_serializer.data,
+            "distributor_users": distributor_true_serializer.data,
         }
 
         return Response(response_data)
@@ -204,7 +207,7 @@ class UserListView2(APIView):
 
 class UserDetailView(RetrieveUpdateAPIView):
     permission_classes = [IsAdminUser]
-    queryset = CustomUser.objects.all() 
+    queryset = CustomUser.objects.all()
     serializer_class = CustomUserDetailSerializer
 
 
@@ -456,14 +459,20 @@ def excel_sent_message(request):
 
             for row in worksheet.iter_rows(values_only=True):
                 raw_number = str(row[0])
-                print(raw_number)
-                # replace 0 and add +91
-                if raw_number.startswith("0"):
-                    raw_number = "+91" + raw_number[1:]
-                # if no +91 add +91
-                if not raw_number.startswith("+91"):
+                raw_number = raw_number.replace(" ", "")
+
+                if (raw_number.startswith("91")) and (len(raw_number) == 12):
+                    raw_number = "+" + raw_number
+                else:
                     raw_number = "+91" + raw_number
 
+                if raw_number.startswith("0"):
+                    raw_number = "+91" + raw_number[1:]
+
+                # if not raw_number.startswith("+91"):
+                #     raw_number = "+91" + raw_number
+
+                print(raw_number)
                 PhoneNumber.objects.get_or_create(number=raw_number, user_id=user_id)
 
                 data = {
