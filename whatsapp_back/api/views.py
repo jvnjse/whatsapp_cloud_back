@@ -532,10 +532,10 @@ def excel_personalised_sent_message(request):
                 raw_number = str(row[1])
                 name = str(row[0])
                 print(name, raw_number)
-                # replace 0 and add +91
+
                 if raw_number.startswith("0"):
                     raw_number = "+91" + raw_number[1:]
-                # if no +91 add +91
+
                 if not raw_number.startswith("+91"):
                     raw_number = "+91" + raw_number
 
