@@ -27,7 +27,7 @@ SECRET_KEY = "django-insecure-ynr1znbi4l^2(zes)$$rl@*t4bl_0!z2&6(qflc1p43pkux8zo
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ["akita-model-nominally.ngrok-free.app", "127.0.0.1"]
+ALLOWED_HOSTS = ["localhost", "127.0.0.1", "altosconnectweb"]
 
 
 # Application definition
@@ -77,12 +77,15 @@ TEMPLATES = [
 # CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
+    "https://localhost:3000",
+    # "http://altosconnect.com",
+    # "https://altosconnect.com",
 ]
 CORS_ORIGIN_WHITELIST = (
-    "http://example.com",
-    "http://127.0.0.1:8000",
     "http://localhost:3000",
-    "http://localhost:8000",
+    "https://localhost:3000",
+    # "http://altosconnect.com",
+    # "https://altosconnect.com",
 )
 CORS_ALLOW_HEADERS = [
     "accept",
@@ -97,7 +100,6 @@ CORS_ALLOW_HEADERS = [
     "formdata",
 ]
 
-# CORS_ALLOW_HEADERS = ["content-type", "authorization"]
 
 WSGI_APPLICATION = "whatsapp_back.wsgi.application"
 
@@ -200,7 +202,7 @@ EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_USE_SSL = False
 EMAIL_HOST_USER = "jeevanjose2016@gmail.com"
-EMAIL_HOST_PASSWORD = "uemprbywcrgmgavl"
+EMAIL_HOST_PASSWORD = "mbmxvoehxunkmvwh"
 
 
 # EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"

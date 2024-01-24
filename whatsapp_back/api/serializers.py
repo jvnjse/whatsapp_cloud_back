@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import PhoneNumber, CustomUser, Template
+from .models import PhoneNumber, CustomUser, Template, ContactForm
 import random
 import string
 from django.core.mail import send_mail, EmailMultiAlternatives
@@ -180,3 +180,9 @@ class MessageTextTemplateSerializer(serializers.Serializer):
 class ScheduledAPISerializer(serializers.Serializer):
     scheduled_time = serializers.DateTimeField()
     api_data = serializers.CharField()
+
+
+class ContactFormSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ContactForm
+        fields = "__all__"

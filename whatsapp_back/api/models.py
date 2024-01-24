@@ -32,7 +32,7 @@ class CustomUserManager(BaseUserManager):
 class CustomUser(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(unique=True)
     is_active = models.BooleanField(default=False)
-    is_staff = models.BooleanField(default=True)
+    is_staff = models.BooleanField(default=False)
     is_distributor = models.BooleanField(default=False)
     messaging_feature = models.BooleanField(default=True)
     excel_feature = models.BooleanField(default=False)
@@ -100,3 +100,12 @@ class Template(models.Model):
 class ScheduledAPICall(models.Model):
     api_data = models.TextField()
     scheduled_time = models.DateTimeField()
+
+
+class ContactForm(models.Model):
+    first_name = models.CharField(max_length=100)
+    last_name = models.CharField(max_length=100)
+    email = models.EmailField()
+    code = models.CharField(max_length=10)
+    phone = models.CharField(max_length=20)
+    issue_description = models.TextField()

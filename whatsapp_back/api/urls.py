@@ -92,6 +92,16 @@ urlpatterns = [
         name="create_image_template_personalised",
     ),
     path(
+        "post_template/image/url",
+        views.create_image_template_url,
+        name="create_image_template_url",
+    ),
+    path(
+        "post_template/image/call",
+        views.create_image_template_call,
+        name="create_image_template_call",
+    ),
+    path(
         "upload/sent",
         views.excel_sent_message,
         name="excel_sent_message",
@@ -141,6 +151,7 @@ urlpatterns = [
     #     EditReferralStringAPIView.as_view(),
     #     name="api_edit_referral_string",
     # ),
+    path("contact-form/", ContactFormView.as_view(), name="contact-form"),
     path("upload/", PhoneNumberUpload.as_view(), name="upload_phone_numbers"),
     path("register/", UserRegistrationView.as_view(), name="user_registration"),
     path("login/", UserLoginView.as_view(), name="user_login"),
