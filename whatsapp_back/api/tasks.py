@@ -1,18 +1,16 @@
 # # # tasks.py
 
-# # from celery import shared_task
-# # from datetime import datetime, timezone
-# # from api.models import ScheduledAPICall
+from celery import shared_task
+from datetime import datetime, timezone
+from api.models import ScheduledAPICall
 
 
-# # @shared_task
-# # def make_api_call(task_id):
-# #     task = ScheduledAPICall.objects.get(id=task_id)
-# #     # Your API call implementation here
-# #     print(
-# #         f"Making API call for task: {task.id} - {task.api_data} at {datetime.now(timezone.utc)}"
-# #     )
-# #     # Update the task status or do any other necessary operations
+@shared_task
+def make_api_call(task_id):
+    task = ScheduledAPICall.objects.get(id=task_id)
+    print(
+        f"Making API call for task: {task.id} - {task.api_data} at {datetime.now(timezone.utc)}"
+    )
 
 
 # # tasks.py

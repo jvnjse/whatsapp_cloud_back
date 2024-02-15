@@ -27,7 +27,8 @@ SECRET_KEY = "django-insecure-ynr1znbi4l^2(zes)$$rl@*t4bl_0!z2&6(qflc1p43pkux8zo
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ["localhost", "127.0.0.1", "altosconnectweb"]
+# ALLOWED_HOSTS = ["altosconnectweb"]
+ALLOWED_HOSTS = ["127.0.0.1"]
 
 
 # Application definition
@@ -74,19 +75,11 @@ TEMPLATES = [
 ]
 
 
-# CORS_ALLOW_ALL_ORIGINS = True
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "https://localhost:3000",
-    # "http://altosconnect.com",
-    # "https://altosconnect.com",
-]
-CORS_ORIGIN_WHITELIST = (
-    "http://localhost:3000",
-    "https://localhost:3000",
-    # "http://altosconnect.com",
-    # "https://altosconnect.com",
-)
+CORS_ALLOW_ALL_ORIGINS = True
+# CORS_ALLOWED_ORIGINS = [
+#     "https://altosconnect.com",
+# ]
+# CORS_ORIGIN_WHITELIST = ("https://altosconnect.com",)
 CORS_ALLOW_HEADERS = [
     "accept",
     "accept-encoding",
@@ -140,7 +133,7 @@ AUTH_PASSWORD_VALIDATORS = [
 LANGUAGE_CODE = "en-us"
 
 TIME_ZONE = "Asia/Kolkata"
-TIME_ZONE = "UTC"
+# TIME_ZONE = "UTC"
 
 
 USE_I18N = True
@@ -162,8 +155,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(days=1),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
+    "ACCESS_TOKEN_LIFETIME": timedelta(days=5),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=5),
     "AUTH_HEADER_TYPES": ("Bearer",),
     "AUTH_HEADER_NAME": "HTTP_AUTHORIZATION",
     "USER_ID_FIELD": "id",
@@ -221,13 +214,16 @@ EMAIL_HOST_PASSWORD = "mbmxvoehxunkmvwh"
 
 
 # settings.py
-# CELERY_BROKER_URL = "redis://localhost:6379/0"
-# CELERY_RESULT_BACKEND = "redis://localhost:6379/0"
-# CELERY_ACCEPT_CONTENT = ["json"]
-# CELERY_TASK_SERIALIZER = "json"
-# CELERY_RESULT_SERIALIZER = "json"
-# CELERY_TIMEZONE = "UTC"
-DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000
+CELERY_BROKER_URL = "redis://127.0.0.1:6379"
+CELERY_RESULT_BACKEND = "redis://localhost:6379"
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
 
+CELERY_TIMEZONE = "Asia/Kolkata"
+BROKER_URL = "redis://localhost:6379"
+
+
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000
 
 # SECURE_SSL_REDIRECT = True

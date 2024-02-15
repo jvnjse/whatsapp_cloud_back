@@ -34,10 +34,9 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     is_active = models.BooleanField(default=False)
     is_staff = models.BooleanField(default=False)
     is_distributor = models.BooleanField(default=False)
-    messaging_feature = models.BooleanField(default=True)
-    excel_feature = models.BooleanField(default=False)
-    image_feature = models.BooleanField(default=False)
-    personalised_feature = models.BooleanField(default=False)
+    basic_feature = models.BooleanField(default=True)
+    standard_feature = models.BooleanField(default=False)
+    advanced_feature = models.BooleanField(default=False)
     referral_string = models.CharField(
         max_length=8,
         unique=True,
@@ -98,8 +97,8 @@ class Template(models.Model):
 
 
 class ScheduledAPICall(models.Model):
-    api_data = models.TextField()
-    scheduled_time = models.DateTimeField()
+    api_data = models.TextField(null=True)
+    scheduled_time = models.DateTimeField(null=True)
 
 
 class ContactForm(models.Model):

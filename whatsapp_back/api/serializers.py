@@ -72,15 +72,13 @@ class CustomUserDetailSerializer(serializers.ModelSerializer):
         model = CustomUser
         fields = (
             # "id",
-            # "email",
+            "email",
             "is_active",
             "is_staff",
             "is_distributor",
-            "is_distributor",
-            "messaging_feature",
-            "excel_feature",
-            "image_feature",
-            "personalised_feature",
+            "basic_feature",
+            "standard_feature",
+            "advanced_feature",
         )
 
 

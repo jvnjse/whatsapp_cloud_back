@@ -146,6 +146,11 @@ urlpatterns = [
         ViewReferralStringAPIView.as_view(),
         name="api_view_referral_string",
     ),
+    path(
+        "post_template/document",
+        views.create_document_template,
+        name="create_document_template",
+    ),
     # path(
     #     "user/<int:user_id>/edit-referral/",
     #     EditReferralStringAPIView.as_view(),
