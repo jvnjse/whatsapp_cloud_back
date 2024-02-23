@@ -62,18 +62,17 @@ def get_tokens_for_user(user):
 
 
 def get_credentials(user_id):
-    # get_credential = get_credentials(user_id)
-    # phone_number_id = get_credential[0]["phone_number_id"]
-    # business_id = get_credential[0]["whatsapp_business_id"]
-    # bearer_token = get_credential[0]["permanent_access_token"]
-
     try:
         credentials = WhatsappCredential.objects.filter(user_id=user_id).values(
             "phone_number_id", "whatsapp_business_id", "permanent_access_token"
         )
-        return credentials
+        if credentials:
+            return credentials
+        else:
+            return None
     except WhatsappCredential.DoesNotExist:
         return None
+        print("ssssss")
 
 
 @api_view(["POST"])
@@ -141,6 +140,7 @@ class UserRegistrationView(APIView):
         serializer = CustomUserSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
+
             response_data = {
                 "message": "User registered successfully",
                 "user": serializer.data,
@@ -157,12 +157,16 @@ class UserLoginView(APIView):
             password = serializer.validated_data.get("password")
 
             user = serializer.validated_data["user"]
-            if user is not None and user.is_active:
+            if (
+                user is not None
+                and user.is_active
+                and self.is_registered_more_than_14_days(user.register_date)
+            ):
                 token = get_tokens_for_user(user)
                 payload = {
-                    "messaging_feature": user.basic_feature,
-                    "excel_feature": user.standard_feature,
-                    "image_feature": user.advanced_feature,
+                    "basic_feature": user.basic_feature,
+                    "standard_feature": user.standard_feature,
+                    "advanced_feature": user.advanced_feature,
                 }
                 secret_key = "whatsapp"
                 feature_token = jwt.encode(payload, secret_key, algorithm="HS256")
@@ -179,12 +183,26 @@ class UserLoginView(APIView):
                     },
                     status=status.HTTP_200_OK,
                 )
+            elif user is not None and user.is_active:
+                return Response(
+                    {"message": "Trial is expired. Please Contact Us to Continue."},
+                    status=status.HTTP_401_UNAUTHORIZED,
+                )
             else:
                 return Response(
                     {"message": "Invalid credentials or inactive account"},
                     status=status.HTTP_401_UNAUTHORIZED,
                 )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {"message": "Invalid credentials or inactive account"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    def is_registered_more_than_14_days(self, register_date):
+        register_date = datetime.combine(register_date, datetime.min.time())
+        register_date = timezone.make_aware(register_date)
+        days_difference = (timezone.now() - register_date).days
+        return days_difference < 14
 
 
 class UserListView2(APIView):
@@ -299,7 +317,7 @@ def upload_image(request):
 
     bearer_token = urllib.parse.quote(bearer_token, safe="")
     url1 = (
-        "https://graph.facebook.com/v18.0/329306953144911/uploads?access_token="
+        "https://graph.facebook.com/v19.0/329306953144911/uploads?access_token="
         + bearer_token
         + "&file_length=0&file_type=image/png"
     )
@@ -331,7 +349,7 @@ def upload_image(request):
 
         data_url = f"data:image;base64,{encoded_string}"
 
-        url2 = "https://graph.facebook.com/v18.0/" + upload_session_key
+        url2 = "https://graph.facebook.com/v19.0/" + upload_session_key
         headers = {"Authorization": "OAuth " + bearer_token, "file_offset": "0"}
 
         # files = {"source": (file_name, open(file_name, "rb"))}
@@ -368,7 +386,7 @@ def delete_template(request):
         cleaned_string = template_name.replace('"', "")
 
         url = (
-            "https://graph.facebook.com/v18.0/"
+            "https://graph.facebook.com/v19.0/"
             + business_id
             + "/message_templates?name="
             + cleaned_string
@@ -488,7 +506,7 @@ def excel_sent_message(request):
                 # #print(data)
 
                 url = (
-                    "https://graph.facebook.com/v18.0/" + phone_number_id + "/messages"
+                    "https://graph.facebook.com/v19.0/" + phone_number_id + "/messages"
                 )
                 headers = {
                     "Authorization": "Bearer " + bearer_token,
@@ -567,7 +585,7 @@ def excel_personalised_sent_message(request):
                 }
 
                 url = (
-                    "https://graph.facebook.com/v18.0/" + phone_number_id + "/messages"
+                    "https://graph.facebook.com/v19.0/" + phone_number_id + "/messages"
                 )
                 headers = {
                     "Authorization": "Bearer " + bearer_token,
@@ -654,7 +672,7 @@ def excel_sent_message_images(request):
                 # #print(data)
 
                 url = (
-                    "https://graph.facebook.com/v18.0/" + phone_number_id + "/messages"
+                    "https://graph.facebook.com/v19.0/" + phone_number_id + "/messages"
                 )
                 headers = {
                     "Authorization": "Bearer " + bearer_token,
@@ -749,7 +767,7 @@ def excel_sent_message_images_personalised(request):
                 # #print(data)
 
                 url = (
-                    "https://graph.facebook.com/v18.0/" + phone_number_id + "/messages"
+                    "https://graph.facebook.com/v19.0/" + phone_number_id + "/messages"
                 )
                 headers = {
                     "Authorization": "Bearer " + bearer_token,
@@ -852,7 +870,7 @@ def send_whatsapp_bulk_messages(request):
                 "type": "template",
                 "template": {"name": template_name, "language": {"code": "en"}},
             }
-            url = "https://graph.facebook.com/v18.0/" + phone_number_id + "/messages"
+            url = "https://graph.facebook.com/v19.0/" + phone_number_id + "/messages"
             headers = {
                 "Authorization": "Bearer " + bearer_token,
                 "Content-Type": "application/json",
@@ -942,7 +960,7 @@ def send_whatsapp_bulk_messages_images(request):
                     "language": {"code": "en"},
                 },
             }
-            url = "https://graph.facebook.com/v18.0/" + phone_number_id + "/messages"
+            url = "https://graph.facebook.com/v19.0/" + phone_number_id + "/messages"
             headers = {
                 "Authorization": "Bearer " + bearer_token,
                 "Content-Type": "application/json",
@@ -1005,7 +1023,7 @@ def send_whatsapp_model_bulk_messages(request):
                 "template": {"name": template_name, "language": {"code": "en"}},
             }
 
-            url = "https://graph.facebook.com/v18.0/" + phone_number_id + "/messages"
+            url = "https://graph.facebook.com/v19.0/" + phone_number_id + "/messages"
             headers = {
                 "Authorization": "Bearer " + bearer_token,
                 "Content-Type": "application/json",
@@ -1093,7 +1111,7 @@ def send_whatsapp_model_bulk_messages_images(request):
             }
             # #print(data)
 
-            url = "https://graph.facebook.com/v18.0/" + phone_number_id + "/messages"
+            url = "https://graph.facebook.com/v19.0/" + phone_number_id + "/messages"
             headers = {
                 "Authorization": "Bearer " + bearer_token,
                 "Content-Type": "application/json",
@@ -1141,7 +1159,7 @@ def get_templates_message(request):
 
     # print(template_image_array)
 
-    url = "https://graph.facebook.com/v18.0/" + business_id + "/message_templates"
+    url = "https://graph.facebook.com/v19.0/" + business_id + "/message_templates"
     headers = {
         "Authorization": "Bearer " + bearer_token,
     }
@@ -1177,7 +1195,7 @@ def get_templates_list(request):
     business_id = get_credential[0]["whatsapp_business_id"]
     bearer_token = get_credential[0]["permanent_access_token"]
 
-    url = "https://graph.facebook.com/v18.0/" + business_id + "/message_templates"
+    url = "https://graph.facebook.com/v19.0/" + business_id + "/message_templates"
     headers = {
         "Authorization": "Bearer " + bearer_token,
     }
@@ -1208,7 +1226,7 @@ def create_text_template(request):
     business_id = get_credential[0]["whatsapp_business_id"]
     bearer_token = get_credential[0]["permanent_access_token"]
     facebook_api_url = (
-        "https://graph.facebook.com/v18.0/" + business_id + "/message_templates"
+        "https://graph.facebook.com/v19.0/" + business_id + "/message_templates"
     )
     serializer = MessageTextTemplateSerializer(data=request.data)
 
@@ -1274,7 +1292,7 @@ def create_image_template(request):
     bearer_token = get_credential[0]["permanent_access_token"]
 
     facebook_api_url = (
-        "https://graph.facebook.com/v18.0/" + business_id + "/message_templates"
+        "https://graph.facebook.com/v19.0/" + business_id + "/message_templates"
     )
     serializer = MessageTemplateSerializer(data=request.data)
 
@@ -1336,7 +1354,7 @@ def create_image_template_url(request):
     bearer_token = get_credential[0]["permanent_access_token"]
 
     facebook_api_url = (
-        "https://graph.facebook.com/v18.0/" + business_id + "/message_templates"
+        "https://graph.facebook.com/v19.0/" + business_id + "/message_templates"
     )
     serializer = MessageTemplateSerializer(data=request.data)
 
@@ -1410,7 +1428,7 @@ def create_image_template_call(request):
     bearer_token = get_credential[0]["permanent_access_token"]
 
     facebook_api_url = (
-        "https://graph.facebook.com/v18.0/" + business_id + "/message_templates"
+        "https://graph.facebook.com/v19.0/" + business_id + "/message_templates"
     )
     serializer = MessageTemplateSerializer(data=request.data)
 
@@ -1484,7 +1502,7 @@ def create_image_template_personalised(request):
     bearer_token = get_credential[0]["permanent_access_token"]
 
     facebook_api_url = (
-        "https://graph.facebook.com/v18.0/" + business_id + "/message_templates"
+        "https://graph.facebook.com/v19.0/" + business_id + "/message_templates"
     )
     serializer = MessageTemplateSerializer(data=request.data)
 
@@ -1552,7 +1570,7 @@ def create_text_template_button_site(request):
     bearer_token = get_credential[0]["permanent_access_token"]
 
     facebook_api_url = (
-        "https://graph.facebook.com/v18.0/" + business_id + "/message_templates"
+        "https://graph.facebook.com/v19.0/" + business_id + "/message_templates"
     )
     serializer = MessageTemplateSerializer(data=request.data)
 
@@ -1628,7 +1646,7 @@ def create_text_template_button_call(request):
     bearer_token = get_credential[0]["permanent_access_token"]
 
     facebook_api_url = (
-        "https://graph.facebook.com/v18.0/" + business_id + "/message_templates"
+        "https://graph.facebook.com/v19.0/" + business_id + "/message_templates"
     )
     serializer = MessageTemplateSerializer(data=request.data)
 
@@ -1699,7 +1717,7 @@ def create_text_template_personalised(request):
     business_id = get_credential[0]["whatsapp_business_id"]
     bearer_token = get_credential[0]["permanent_access_token"]
     facebook_api_url = (
-        "https://graph.facebook.com/v18.0/" + business_id + "/message_templates"
+        "https://graph.facebook.com/v19.0/" + business_id + "/message_templates"
     )
     serializer = MessageTextTemplateSerializer(data=request.data)
 
@@ -1761,7 +1779,7 @@ def create_text_template_button_site_personalised(request):
     bearer_token = get_credential[0]["permanent_access_token"]
 
     facebook_api_url = (
-        "https://graph.facebook.com/v18.0/" + business_id + "/message_templates"
+        "https://graph.facebook.com/v19.0/" + business_id + "/message_templates"
     )
     serializer = MessageTemplateSerializer(data=request.data)
 
@@ -1838,7 +1856,7 @@ def create_text_template_button_call_personalised(request):
     bearer_token = get_credential[0]["permanent_access_token"]
 
     facebook_api_url = (
-        "https://graph.facebook.com/v18.0/" + business_id + "/message_templates"
+        "https://graph.facebook.com/v19.0/" + business_id + "/message_templates"
     )
     serializer = MessageTemplateSerializer(data=request.data)
 
@@ -1915,7 +1933,7 @@ def create_document_template(request):
     bearer_token = get_credential[0]["permanent_access_token"]
 
     facebook_api_url = (
-        "https://graph.facebook.com/v18.0/" + business_id + "/message_templates"
+        "https://graph.facebook.com/v19.0/" + business_id + "/message_templates"
     )
     serializer = MessageTemplateSerializer(data=request.data)
 
@@ -2151,7 +2169,7 @@ def schedule_api_call(request):
 #             "template": {"name": "developer_test", "language": {"code": "en"}},
 #         }
 
-#         url = "https://graph.facebook.com/v18.0/123004784227116/messages"
+#         url = "https://graph.facebook.com/v19.0/123004784227116/messages"
 #         headers = {
 #             "Authorization": "Bearer "
 #             + bearer_token,  # Include the Bearer token in the headers
@@ -2214,3 +2232,45 @@ class ContactFormView(APIView):
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def check_validation(request):
+    user_id = request.GET.get("user_id")
+    get_credential = get_credentials(user_id)
+    if get_credential is not None:
+        phone_number_id = get_credential[0]["phone_number_id"]
+        business_id = get_credential[0]["whatsapp_business_id"]
+        bearer_token = get_credential[0]["permanent_access_token"]
+
+        facebook_api_url = (
+            "https://graph.facebook.com/v18.0/" + business_id + "/message_templates"
+        )
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + bearer_token,
+        }
+
+        response = requests.get(facebook_api_url, headers=headers)
+        response_data = response.json()
+
+        if response.status_code == status.HTTP_200_OK:
+            return Response(
+                {"message": response_data, "access": "added"},
+                status=status.HTTP_200_OK,
+            )
+        else:
+            return Response(
+                {
+                    "message": {
+                        "phone_number_id": phone_number_id,
+                        "business_id": business_id,
+                    },
+                    "access": "added-not-valid",
+                },
+                status=response.status_code,
+            )
+    else:
+        return Response({"access": "not-added"}, status=status.HTTP_400_BAD_REQUEST)

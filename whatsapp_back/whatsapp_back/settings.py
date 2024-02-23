@@ -27,7 +27,7 @@ SECRET_KEY = "django-insecure-ynr1znbi4l^2(zes)$$rl@*t4bl_0!z2&6(qflc1p43pkux8zo
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-# ALLOWED_HOSTS = ["altosconnectweb"]
+# ALLOWED_HOSTS = ["altosconnectweb.com", "altosconnectweb"]
 ALLOWED_HOSTS = ["127.0.0.1"]
 
 

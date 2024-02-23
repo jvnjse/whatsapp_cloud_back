@@ -151,6 +151,11 @@ urlpatterns = [
         views.create_document_template,
         name="create_document_template",
     ),
+    path(
+        "validate/credentials",
+        views.check_validation,
+        name="check_validation",
+    ),
     # path(
     #     "user/<int:user_id>/edit-referral/",
     #     EditReferralStringAPIView.as_view(),

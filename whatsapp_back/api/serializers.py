@@ -6,6 +6,7 @@ from django.core.mail import send_mail, EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
 from django.conf import settings
+import datetime
 
 
 class CustomUserSerializer(serializers.ModelSerializer):
@@ -19,19 +20,43 @@ class CustomUserSerializer(serializers.ModelSerializer):
             "is_active",
             "is_staff",
             "is_distributor",
+            "first_name",
+            "last_name",
+            "phone",
+            "company_name",
+            "known_by",
             "referral_string",
+            "register_date",
         )
         # extra_kwargs = {"password": {"write_only": True}}
 
     def create(self, validated_data):
         email = validated_data.get("email")
+        first_name = validated_data.get("first_name")
+        last_name = validated_data.get("last_name")
+        is_active = validated_data.get("is_active", True)
+        is_staff = validated_data.get("is_staff", False)
+        is_distributor = validated_data.get("is_distributor", False)
+        phone = validated_data.get("phone")
+        company_name = validated_data.get("company_name")
+        known_by = validated_data.get("known_by")
         referral_string = validated_data.get("referral_string")
 
         password = "".join(
             random.choice(string.ascii_letters + string.digits) for _ in range(6)
         )
 
-        instance = self.Meta.model(email=email)
+        instance = self.Meta.model(
+            email=email,
+            first_name=first_name,
+            last_name=last_name,
+            is_active=is_active,
+            is_staff=is_staff,
+            is_distributor=is_distributor,
+            phone=phone,
+            company_name=company_name,
+            known_by=known_by,
+        )
         instance.set_password(password)
 
         if referral_string:
@@ -56,13 +81,8 @@ class CustomUserSerializer(serializers.ModelSerializer):
         )
         message.attach_alternative(html_message, "text/html")
         message.send()
-        # send_mail(
-        #     subject="Your New Account Password",
-        #     message=f"Your password is: {password}",
-        #     from_email="jeevanjose2016@gmail.com",
-        #     recipient_list=[email],
-        #     fail_silently=False,
-        # )
+
+        instance.register_date = datetime.date.today()
         instance.save()
         return instance
 

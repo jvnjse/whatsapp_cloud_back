@@ -29,6 +29,9 @@ class CustomUserManager(BaseUserManager):
         return self.create_user(email, password, **extra_fields)
 
 
+import datetime
+
+
 class CustomUser(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(unique=True)
     is_active = models.BooleanField(default=False)
@@ -37,6 +40,8 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     basic_feature = models.BooleanField(default=True)
     standard_feature = models.BooleanField(default=False)
     advanced_feature = models.BooleanField(default=False)
+    trial_used = models.BooleanField(default=False)
+    register_date = models.DateField(blank=True, null=True)
     referral_string = models.CharField(
         max_length=8,
         unique=True,
@@ -44,6 +49,31 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     )
     parent_user = models.ForeignKey(
         "self", null=True, blank=True, on_delete=models.SET_NULL
+    )
+    first_name = models.CharField(
+        max_length=30,
+        null=True,
+        blank=True,
+    )
+    last_name = models.CharField(
+        max_length=30,
+        null=True,
+        blank=True,
+    )
+    phone = models.CharField(
+        max_length=30,
+        null=True,
+        blank=True,
+    )
+    company_name = models.CharField(
+        max_length=30,
+        null=True,
+        blank=True,
+    )
+    known_by = models.CharField(
+        max_length=30,
+        null=True,
+        blank=True,
     )
 
     # def update_referral_string(self):
