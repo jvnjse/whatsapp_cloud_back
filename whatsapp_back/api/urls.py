@@ -161,6 +161,7 @@ urlpatterns = [
     #     EditReferralStringAPIView.as_view(),
     #     name="api_edit_referral_string",
     # ),
+    path("check/token/", CheckTokenValidityView.as_view(), name="check-token"),
     path("contact-form/", ContactFormView.as_view(), name="contact-form"),
     path("upload/", PhoneNumberUpload.as_view(), name="upload_phone_numbers"),
     path("register/", UserRegistrationView.as_view(), name="user_registration"),

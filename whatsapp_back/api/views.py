@@ -1,3 +1,4 @@
+from django.conf import settings
 import requests, json
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -1530,8 +1531,8 @@ def create_image_template_personalised(request):
                         "type": "BODY",
                         # "text": "Thank you for your order, {{1}}! Your confirmation number is {{2}}. If you have any questions, please use the buttons below to contact support. Thank you for being a customer!",
                         # "example": {"body_text": [["Pablo", "860198-230332"]]}
-                        "text": f"{body_text}",
-                        "example": {"body_text": [["Sample"]]},
+                        "text": body_text,
+                        "example": {"body_text": ["Sample"]},
                     },
                     {"type": "FOOTER", "text": footer_text},
                 ],
@@ -1545,6 +1546,8 @@ def create_image_template_personalised(request):
 
         response = requests.post(facebook_api_url, data=post_data, headers=headers)
         response_data = response.json()
+
+        print(response_data)
 
         if response.status_code == status.HTTP_200_OK:
             return Response(
@@ -2189,7 +2192,6 @@ def schedule_api_call(request):
 # from django.core.mail import send_mail, EmailMultiAlternatives
 # from django.template.loader import render_to_string
 # from django.utils.html import strip_tags
-# from django.conf import settings
 # from io import BytesIO
 # from xhtml2pdf import pisa
 
@@ -2274,3 +2276,25 @@ def check_validation(request):
             )
     else:
         return Response({"access": "not-added"}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class CheckTokenValidityView(APIView):
+    def get(self, request):
+        token = request.GET.get("token")
+
+        if not token:
+            return Response(
+                {"error": "Token not provided"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+            return Response({"message": "Token is valid"}, status=status.HTTP_200_OK)
+        except jwt.ExpiredSignatureError:
+            return Response(
+                {"error": "Token has expired"}, status=status.HTTP_401_UNAUTHORIZED
+            )
+        except jwt.InvalidTokenError:
+            return Response(
+                {"error": "Invalid token"}, status=status.HTTP_401_UNAUTHORIZED
+            )
