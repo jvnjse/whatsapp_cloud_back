@@ -40,7 +40,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     basic_feature = models.BooleanField(default=True)
     standard_feature = models.BooleanField(default=False)
     advanced_feature = models.BooleanField(default=False)
-    trial_used = models.BooleanField(default=False)
+    trial_user = models.BooleanField(default=False)
     register_date = models.DateField(blank=True, null=True)
     referral_string = models.CharField(
         max_length=8,
@@ -138,3 +138,10 @@ class ContactForm(models.Model):
     code = models.CharField(max_length=10)
     phone = models.CharField(max_length=20)
     issue_description = models.TextField()
+
+
+class Notification(models.Model):
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    message = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_read = models.BooleanField(default=False)

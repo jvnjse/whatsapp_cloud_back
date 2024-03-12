@@ -36,6 +36,7 @@ class CustomUserSerializer(serializers.ModelSerializer):
         last_name = validated_data.get("last_name")
         is_active = validated_data.get("is_active", True)
         is_staff = validated_data.get("is_staff", False)
+        trial_user = validated_data.get("trial_user", True)
         is_distributor = validated_data.get("is_distributor", False)
         phone = validated_data.get("phone")
         company_name = validated_data.get("company_name")
@@ -56,6 +57,7 @@ class CustomUserSerializer(serializers.ModelSerializer):
             phone=phone,
             company_name=company_name,
             known_by=known_by,
+            trial_user=trial_user,
         )
         instance.set_password(password)
 

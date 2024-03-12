@@ -35,12 +35,14 @@ from .models import (
     Template,
     ScheduledAPICall,
     ContactForm,
+    Notification,
 )
 from openpyxl import load_workbook
 from decouple import config
 from django.contrib.auth import authenticate
 import urllib.parse
 import base64, os, random, string, jwt
+from .functions.trial_notifications import check_trial_period
 
 my_token = "your_verify_token"
 bearer_token = config("TOKEN")
@@ -171,6 +173,7 @@ class UserLoginView(APIView):
                 }
                 secret_key = "whatsapp"
                 feature_token = jwt.encode(payload, secret_key, algorithm="HS256")
+                check_trial_period(user)
                 # print(feature_token)
                 return Response(
                     {
@@ -629,10 +632,8 @@ def excel_sent_message_images(request):
             workbook = load_workbook(excel_file, read_only=True)
             worksheet = workbook.active
             results = []
-            # template_instance = get_object_or_404(
-            #     Template, user__id=user_id, template_name=template_name
-            # )
-            # image_link_get = f"{domain_url}{template_instance.template_image.url}"
+            template_instance = get_object_or_404(Template, template_name=template_name)
+            image_link_get = f"{domain_url}{template_instance.template_image.url}"
             for row in worksheet.iter_rows(values_only=True):
                 raw_number = str(row[0])
                 raw_number = raw_number.replace(" ", "")
@@ -716,9 +717,7 @@ def excel_sent_message_images_personalised(request):
             workbook = load_workbook(excel_file, read_only=True)
             worksheet = workbook.active
             results = []
-            template_instance = get_object_or_404(
-                Template, user__id=user_id, template_name=template_name
-            )
+            template_instance = get_object_or_404(Template, template_name=template_name)
             image_link_get = f"{domain_url}{template_instance.template_image.url}"
             for row in worksheet.iter_rows(values_only=True):
                 raw_number = str(row[1])
@@ -917,9 +916,7 @@ def send_whatsapp_bulk_messages_images(request):
 
             # #print(template_name)
             results = []
-            template_instance = get_object_or_404(
-                Template, user__id=user_id, template_name=template_name
-            )
+            template_instance = get_object_or_404(Template, template_name=template_name)
             image_link_get = f"{domain_url}{template_instance.template_image.url}"
 
         for number in numbers:
@@ -1067,9 +1064,7 @@ def send_whatsapp_model_bulk_messages_images(request):
             "number", flat=True
         )
         numbers = list(get_numbers)
-        template_instance = get_object_or_404(
-            Template, user__id=user_id, template_name=template_name
-        )
+        template_instance = get_object_or_404(Template, template_name=template_name)
         image_link_get = f"{domain_url}{template_instance.template_image.url}"
 
         # #print(f"{domain_url}{template_instance.template_image.url}")
@@ -2021,7 +2016,7 @@ def whatsapp_webhook(request):
 
 from datetime import datetime, timedelta, timezone
 
-from .tasks import make_api_call
+# from .tasks import make_api_call
 
 import pytz
 
@@ -2031,7 +2026,8 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.utils import timezone
 from datetime import datetime
-from .tasks import schedule_hello
+
+# from .tasks import schedule_hello
 
 
 class ScheduleHelloView(APIView):
@@ -2297,4 +2293,27 @@ class CheckTokenValidityView(APIView):
         except jwt.InvalidTokenError:
             return Response(
                 {"error": "Invalid token"}, status=status.HTTP_401_UNAUTHORIZED
+            )
+
+
+class CheckNotifications(APIView):
+    def get(self, request):
+        userid = request.GET.get("userid")
+
+        if not userid:
+            return Response(
+                {"error": "Userid not provided"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if userid:
+            print("try")
+            notification = Notification.objects.filter(user__id=userid)
+            notifications = [{"notification": data.message} for data in notification]
+            print(notification)
+
+            return JsonResponse(notifications, safe=False, status=status.HTTP_200_OK)
+
+        else:
+            return JsonResponse(
+                {"notification": "no notification"}, status=status.HTTP_401_UNAUTHORIZED
             )

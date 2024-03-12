@@ -162,6 +162,9 @@ urlpatterns = [
     #     name="api_edit_referral_string",
     # ),
     path("check/token/", CheckTokenValidityView.as_view(), name="check-token"),
+    path(
+        "check/notifications/", CheckNotifications.as_view(), name="check-notifications"
+    ),
     path("contact-form/", ContactFormView.as_view(), name="contact-form"),
     path("upload/", PhoneNumberUpload.as_view(), name="upload_phone_numbers"),
     path("register/", UserRegistrationView.as_view(), name="user_registration"),
