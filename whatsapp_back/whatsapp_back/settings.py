@@ -77,9 +77,9 @@ TEMPLATES = [
 
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_ALL_ORIGINS = True
-# CORS_ALLOWED_ORIGINS = [
-#     "https://altosconnect.com",
-# ]
+CORS_ALLOWED_ORIGINS = [
+    "https://altosconnect.com",
+]
 # CORS_ORIGIN_WHITELIST = ("https://altosconnect.com",)
 # CORS_ALLOW_HEADERS = [
 #     "accept",
@@ -105,9 +105,23 @@ DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
         "NAME": BASE_DIR / "db.sqlite3",
+        "ATOMIC_REQUESTS": True,
     }
 }
-
+# DATABASES = {
+#     "default": {
+#         "ENGINE": "django.db.backends.mysql",
+#         "NAME": "your_database_name",
+#         "USER": "your_database_user",
+#         "PASSWORD": "your_database_password",
+#         "HOST": "your_database_host",
+#         "PORT": "your_database_port",
+#         "OPTIONS": {
+#             "autocommit": True,
+#         },
+#     }
+# }
+ATOMIC_REQUESTS = False
 
 # Password validation
 # https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
@@ -156,8 +170,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=5),
-    "REFRESH_TOKEN_LIFETIME": timedelta(minutes=5),
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=25),
+    "REFRESH_TOKEN_LIFETIME": timedelta(minutes=25),
     "AUTH_HEADER_TYPES": ("Bearer",),
     "AUTH_HEADER_NAME": "HTTP_AUTHORIZATION",
     "USER_ID_FIELD": "id",
@@ -206,23 +220,21 @@ EMAIL_HOST_PASSWORD = "mbmxvoehxunkmvwh"
 # EMAIL_USE_SSL = False
 # EMAIL_HOST_USER = "altostechnologies6@gmail.com"
 # EMAIL_HOST_PASSWORD = "jkdpqggohjsmhyay"
-# CELERY_BROKER_URL = "redis://localhost:6379/0"
-# CELERY_RESULT_BACKEND = "redis://localhost:6379/0"
-# CELERY_ACCEPT_CONTENT = ["json"]
-# CELERY_TASK_SERIALIZER = "json"
-# CELERY_RESULT_SERIALIZER = "json"
-# CELERY_TIMEZONE = "UTC"
 
-
-# settings.py
-CELERY_BROKER_URL = "redis://127.0.0.1:6379"
+CELERY_BROKER_URL = "redis://localhost:6379"
 CELERY_RESULT_BACKEND = "redis://localhost:6379"
-CELERY_ACCEPT_CONTENT = ["json"]
-CELERY_TASK_SERIALIZER = "json"
-CELERY_RESULT_SERIALIZER = "json"
-
-CELERY_TIMEZONE = "Asia/Kolkata"
-BROKER_URL = "redis://localhost:6379"
+CELERY_BROKER_CONNECTION_RETRY = True  # Enable connection retries on startup
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+CELERY_BROKER_CONNECTION_RETRY_MAX_RETRIES = 5  # Maximum number of retries
+CELERY_BROKER_CONNECTION_RETRY_INTERVAL = 10
+CELERY_TIMEZONE = "Asia/Kolkata"  # Time zone for Celery tasks
+CELERY_TASK_SERIALIZER = "json"  # Task serializer (JSON format)
+CELERY_RESULT_SERIALIZER = "json"  # Result serializer (JSON format)
+CELERY_ACCEPT_CONTENT = ["json"]  # Accepted content types for task messages
+CELERY_TASK_ACKS_LATE = True  # Acknowledge tasks after they have been executed
+CELERY_TASK_TRACK_STARTED = True  # Track the started state of tasks
+CELERYD_PREFETCH_MULTIPLIER = 1
+# CELERY_BROKER_URL = "redis://localhost:6379/0"
 
 
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000

@@ -165,6 +165,17 @@ urlpatterns = [
     path(
         "check/notifications/", CheckNotifications.as_view(), name="check-notifications"
     ),
+    path(
+        "notifications/<int:notification_id>/",
+        MarkNotificationAsRead.as_view(),
+        name="edit-notification",
+    ),
+    path("plan-purchases/", PlanPurchaseDetail.as_view(), name="plan_purchase_list"),
+    path(
+        "plan-purchases/<int:pk>/",
+        PlanPurchaseDetail.as_view(),
+        name="plan_purchase_detail",
+    ),
     path("contact-form/", ContactFormView.as_view(), name="contact-form"),
     path("upload/", PhoneNumberUpload.as_view(), name="upload_phone_numbers"),
     path("register/", UserRegistrationView.as_view(), name="user_registration"),

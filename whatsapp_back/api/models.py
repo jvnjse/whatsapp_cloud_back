@@ -70,7 +70,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         null=True,
         blank=True,
     )
-    known_by = models.CharField(
+    trial_plan = models.CharField(
         max_length=30,
         null=True,
         blank=True,
@@ -145,3 +145,13 @@ class Notification(models.Model):
     message = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)
     is_read = models.BooleanField(default=False)
+
+
+class PlanPurchase(models.Model):
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    plan = models.CharField(max_length=100)
+    started_date = models.DateField()
+    image = models.ImageField(upload_to="plan_images/", blank=True, null=True)
+
+    def __str__(self):
+        return f"{self.user} - {self.plan}"

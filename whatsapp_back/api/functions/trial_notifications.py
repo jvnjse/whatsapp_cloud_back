@@ -15,13 +15,15 @@ def check_trial_period(user):
     if user.register_date <= five_days_from_trial_end:
         remaining_days = (user.register_date + trial_period - today).days
         message = f"Your trial period is ending in {remaining_days} days! Upgrade to continue using the service."
-        existing_notification = Notification.objects.get(user=user)
+        existing_notification = Notification.objects.get_or_create(
+            user=user, message=message
+        )
 
-        if existing_notification:
-            existing_notification.message = message
-            existing_notification.save()
-        else:
-            notification = Notification.objects.create(user=user, message=message)
+        # if existing_notification:
+        #     existing_notification.message = message
+        #     existing_notification.save()
+        # else:
+        #     notification = Notification.objects.create(user=user, message=message)
 
     else:
         notification = Notification.objects.create(

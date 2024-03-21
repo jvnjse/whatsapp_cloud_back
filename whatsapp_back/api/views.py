@@ -26,6 +26,7 @@ from .serializers import (
     ReferalStringSerializer,
     ScheduledAPISerializer,
     ContactFormSerializer,
+    PlanPurchaseSerializer,
 )
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import (
@@ -36,13 +37,36 @@ from .models import (
     ScheduledAPICall,
     ContactForm,
     Notification,
+    PlanPurchase,
 )
-from openpyxl import load_workbook
+
+# from openpyxl import load_workbook
 from decouple import config
 from django.contrib.auth import authenticate
 import urllib.parse
 import base64, os, random, string, jwt
 from .functions.trial_notifications import check_trial_period
+from .functions.tasks import send_message_to_facebook,send_email
+import pandas as pd
+
+
+def read_file(file_path):
+    file_name = file_path.name
+    print(file_path)
+    if file_name.endswith(".csv"):
+        data = pd.read_csv(file_path)
+    elif file_name.endswith(".xlsx"):
+        data = pd.read_excel(file_path)
+    else:
+        data = None
+    if isinstance(data, pd.DataFrame) and not data.empty:
+        first_column_values = data.iloc[:, 0].tolist()
+        return first_column_values
+    else:
+        return None
+
+    return data
+
 
 my_token = "your_verify_token"
 bearer_token = config("TOKEN")
@@ -85,9 +109,7 @@ def validate_access_token(request):
 
     try:
         refresh = RefreshToken.for_user(user)
-
         refresh.access_token.verify()
-
         return Response({"valid": True})
     except Exception as e:
         return Response({"valid": False}, status=401)
@@ -101,7 +123,6 @@ def upload_credentials(request):
         if serializer.is_valid():
             user_id = serializer.validated_data["user_id"]
 
-            # print(phone_number_id, business_id, bearer_token)
             try:
                 credentials = WhatsappCredential.objects.get(user_id=user_id)
                 # print(credentials)
@@ -213,10 +234,12 @@ class UserListView2(APIView):
     permission_classes = [IsAdminUser]
 
     def get(self, request, format=None):
-        staff_false_users = CustomUser.objects.filter(is_staff=False)
+        staff_false_users = CustomUser.objects.filter(is_staff=False, trial_user=False)
+        trial_users = CustomUser.objects.filter(is_staff=False, trial_user=True)
         distributor_true_users = CustomUser.objects.filter(is_distributor=True)
 
         staff_false_serializer = CustomUserSerializer(staff_false_users, many=True)
+        trial_serializer = CustomUserSerializer(trial_users, many=True)
         distributor_true_serializer = CustomUserSerializer(
             distributor_true_users, many=True
         )
@@ -224,6 +247,7 @@ class UserListView2(APIView):
         response_data = {
             "staff_users": staff_false_serializer.data,
             "distributor_users": distributor_true_serializer.data,
+            "trial_users": trial_serializer.data,
         }
 
         return Response(response_data)
@@ -321,9 +345,9 @@ def upload_image(request):
 
     bearer_token = urllib.parse.quote(bearer_token, safe="")
     url1 = (
-        "https://graph.facebook.com/v19.0/329306953144911/uploads?access_token="
+        "https://graph.facebook.com/v18.0/430156919463638/uploads?access_token="
         + bearer_token
-        + "&file_length=0&file_type=image/png"
+        + "&file_length=20000&file_type=image/png"
     )
 
     response1 = requests.post(url1)
@@ -353,7 +377,7 @@ def upload_image(request):
 
         data_url = f"data:image;base64,{encoded_string}"
 
-        url2 = "https://graph.facebook.com/v19.0/" + upload_session_key
+        url2 = "https://graph.facebook.com/v18.0/" + upload_session_key
         headers = {"Authorization": "OAuth " + bearer_token, "file_offset": "0"}
 
         # files = {"source": (file_name, open(file_name, "rb"))}
@@ -390,7 +414,7 @@ def delete_template(request):
         cleaned_string = template_name.replace('"', "")
 
         url = (
-            "https://graph.facebook.com/v19.0/"
+            "https://graph.facebook.com/v18.0/"
             + business_id
             + "/message_templates?name="
             + cleaned_string
@@ -463,75 +487,230 @@ class PhoneNumberUpload(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+
+
+
+
+
+# @shared_task
+# def send_message_to_facebook(
+#     excel, template_name, user_id, phone_number_id, bearer_token
+# ):
+#     try:
+#         logger.info("Excel Data: %s", excel)
+#         results = []
+#         # excel_data = pd.read_json(excel_data_json)
+#         for value in excel:
+#             raw_number = str(value).replace(" ", "")
+#             if (
+#                 raw_number
+#                 and (raw_number.startswith("91"))
+#                 and (len(raw_number) == 12)
+#             ):
+#                 raw_number = "+" + raw_number
+#             elif raw_number and raw_number.startswith("0"):
+#                 raw_number = "+91" + raw_number[1:]
+#             print(raw_number)
+
+#             if raw_number:
+#                 PhoneNumber.objects.get_or_create(
+#                     number=raw_number, user_id=user_id
+#                 )
+
+#                 data = {
+#                     "messaging_product": "whatsapp",
+#                     "recipient_type": "individual",
+#                     "to": raw_number,
+#                     "type": "template",
+#                     "template": {"name": template_name, "language": {"code": "en"}},
+#                 }
+
+#                 url = f"https://graph.facebook.com/v18.0/{phone_number_id}/messages"
+#                 headers = {
+#                     "Authorization": "Bearer " + bearer_token,
+#                     "Content-Type": "application/json",
+#                 }
+
+#                 try:
+#                     response = requests.post(url, headers=headers, json=data)
+#                     response_data = response.json()
+#                     results.append(response_data)
+#                 except json.JSONDecodeError:
+#                     pass
+#         return "None"
+
+#         # return results
+#     except Exception as e:
+#         # logger.exception("An error occurred in send_message_to_facebook task: %s", e)
+#         # print("dscjbjhb")
+
+#         raise e
+
+
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def excel_sent_message(request):
     try:
-        serializer = ExcelSerializer(data=request.data)
+        print("dscjbjhb")
 
+        serializer = ExcelSerializer(data=request.data)
+        print("error")
         if serializer.is_valid():
-            excel_file = serializer.validated_data["excel_file"]
+            excel_data = serializer.validated_data["excel_file"]
             template_name = serializer.validated_data["template_name"]
             user_id = serializer.validated_data["user_id"]
             get_credential = get_credentials(user_id)
             phone_number_id = get_credential[0]["phone_number_id"]
-            # business_id = get_credential[0]["whatsapp_business_id"]
             bearer_token = get_credential[0]["permanent_access_token"]
+            excel = read_file(excel_data)
 
-            workbook = load_workbook(excel_file, read_only=True)
-            worksheet = workbook.active
-            results = []
-
-            for row in worksheet.iter_rows(values_only=True):
-                raw_number = str(row[0])
-                raw_number = raw_number.replace(" ", "")
-
-                if (raw_number.startswith("91")) and (len(raw_number) == 12):
-                    raw_number = "+" + raw_number
-                else:
-                    raw_number = "+91" + raw_number
-
-                if raw_number.startswith("0"):
-                    raw_number = "+91" + raw_number[1:]
-
-                # if not raw_number.startswith("+91"):
-                #     raw_number = "+91" + raw_number
-
-                # print(raw_number)
-                PhoneNumber.objects.get_or_create(number=raw_number, user_id=user_id)
-
-                data = {
-                    "messaging_product": "whatsapp",
-                    "recipient_type": "individual",
-                    "to": raw_number,
-                    "type": "template",
-                    "template": {"name": template_name, "language": {"code": "en"}},
-                }
-                # #print(data)
-
-                url = (
-                    "https://graph.facebook.com/v19.0/" + phone_number_id + "/messages"
+            try:
+                print("Cdsdc")
+                send_message_to_facebook.delay(
+                    excel, template_name, user_id, phone_number_id, bearer_token
                 )
-                headers = {
-                    "Authorization": "Bearer " + bearer_token,
-                    "Content-Type": "application/json",
-                }
+            except Exception as e:
+                return HttpResponse(str(e), status=500)
 
-                try:
-                    response = requests.post(url, headers=headers, json=data)
-                    response_data = response.json()
-                    results.append(response_data)
-
-                except json.JSONDecodeError:
-                    return JsonResponse({"error": "Invalid JSON data"}, status=400)
             return Response(
-                {"message": "Phone numbers imported successfully"},
-                status=status.HTTP_201_CREATED,
+                {"message": "Phone numbers import task queued successfully"},
+                status=status.HTTP_202_ACCEPTED,
             )
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
+
+
+# @api_view(["POST"])
+# @permission_classes([IsAuthenticated])
+# def excel_sent_message(request):
+#     try:
+#         serializer = ExcelSerializer(data=request.data)
+#         if serializer.is_valid():
+#             excel_file = serializer.validated_data["excel_file"]
+#             template_name = serializer.validated_data["template_name"]
+#             user_id = serializer.validated_data["user_id"]
+#             get_credential = get_credentials(user_id)
+#             phone_number_id = get_credential[0]["phone_number_id"]
+
+#             # Trigger Celery task
+#             process_excel_file_and_send_messages.delay(excel_file, template_name, user_id,phone_number_id)
+
+#             return Response(
+#                 {"message": "Task submitted for processing"},
+#                 status=status.HTTP_202_ACCEPTED,
+#             )
+#         else:
+#             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+#     except Exception as e:
+#         return JsonResponse({"error": str(e)}, status=500)
+import asyncio
+import aiohttp
+
+from asgiref.sync import sync_to_async
+
+# from asgiref.sync import async_to_sync
+# from django.utils.decorators import async_view
+
+# @csrf_exempt
+
+# def excel_sent_message_sync(request):
+#     return async_to_sync(excel_sent_message)(request)
+
+
+# @api_view(["POST"])
+# @permission_classes([IsAuthenticated])
+# async def excel_sent_message(request):
+#     try:
+#         serializer = ExcelSerializer(data=request.data)
+
+#         if serializer.is_valid():
+#             excel_file = serializer.validated_data["excel_file"]
+#             template_name = serializer.validated_data["template_name"]
+#             user_id = serializer.validated_data["user_id"]
+#             get_credential = get_credentials(user_id)
+#             phone_number_id = get_credential[0]["phone_number_id"]
+#             bearer_token = get_credential[0]["permanent_access_token"]
+
+#             print(excel_file)
+#             excel = read_file(excel_file)
+
+#             results = []
+#             tasks = []
+
+#             for index, row in excel.iterrows():
+#                 for column, value in row.items():
+#                     raw_number = str(value)
+#                     raw_number = raw_number.replace(" ", "")
+
+#                     if raw_number is None:
+#                         continue
+
+#                     if (raw_number.startswith("91")) and (len(raw_number) == 12):
+#                         raw_number = "+" + raw_number
+#                     else:
+#                         raw_number = "+91" + raw_number
+
+#                     if raw_number.startswith("0"):
+#                         raw_number = "+91" + raw_number[1:]
+
+#                     print(raw_number)
+#                     await sync_to_async(PhoneNumber.objects.get_or_create)(
+#                         number=raw_number, user_id=user_id
+#                     )
+
+#                     data = {
+#                         "messaging_product": "whatsapp",
+#                         "recipient_type": "individual",
+#                         "to": raw_number,
+#                         "type": "template",
+#                         "template": {"name": template_name, "language": {"code": "en"}},
+#                     }
+
+#                     url = (
+#                         "https://graph.facebook.com/v18.0/"
+#                         + phone_number_id
+#                         + "/messages"
+#                     )
+#                     headers = {
+#                         "Authorization": "Bearer " + bearer_token,
+#                         "Content-Type": "application/json",
+#                     }
+
+#                     tasks.append(
+#                         asyncio.create_task(
+#                             send_whatsapp_message(url, headers, data, results)
+#                         )
+#                     )
+
+#             await asyncio.gather(*tasks)
+
+#             return JsonResponse(
+#                 {"message": "Phone numbers imported successfully"},
+#                 status=status.HTTP_201_CREATED,
+#             )
+#         else:
+#             return JsonResponse(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+#     except Exception as e:
+#         return Response({"error": str(e)}, status=500)
+
+
+# async def send_whatsapp_message(url, headers, data, results):
+#     async with aiohttp.ClientSession() as session:
+#         try:
+#             async with session.post(url, headers=headers, json=data) as response:
+#                 response_data = await response.json()
+#                 results.append(response_data)
+#                 return Response(
+#                     {"message": "Phone numbers imported successfully"},
+#                     status=status.HTTP_201_CREATED,
+#                 )
+#         except json.JSONDecodeError:
+#             return Response(
+#                 {"message": "Phone numbers imported successfully"},
+#                 status=status.HTTP_201_CREATED,
+#             )
 
 
 @api_view(["POST"])
@@ -589,7 +768,7 @@ def excel_personalised_sent_message(request):
                 }
 
                 url = (
-                    "https://graph.facebook.com/v19.0/" + phone_number_id + "/messages"
+                    "https://graph.facebook.com/v18.0/" + phone_number_id + "/messages"
                 )
                 headers = {
                     "Authorization": "Bearer " + bearer_token,
@@ -674,7 +853,7 @@ def excel_sent_message_images(request):
                 # #print(data)
 
                 url = (
-                    "https://graph.facebook.com/v19.0/" + phone_number_id + "/messages"
+                    "https://graph.facebook.com/v18.0/" + phone_number_id + "/messages"
                 )
                 headers = {
                     "Authorization": "Bearer " + bearer_token,
@@ -767,7 +946,7 @@ def excel_sent_message_images_personalised(request):
                 # #print(data)
 
                 url = (
-                    "https://graph.facebook.com/v19.0/" + phone_number_id + "/messages"
+                    "https://graph.facebook.com/v18.0/" + phone_number_id + "/messages"
                 )
                 headers = {
                     "Authorization": "Bearer " + bearer_token,
@@ -870,7 +1049,7 @@ def send_whatsapp_bulk_messages(request):
                 "type": "template",
                 "template": {"name": template_name, "language": {"code": "en"}},
             }
-            url = "https://graph.facebook.com/v19.0/" + phone_number_id + "/messages"
+            url = "https://graph.facebook.com/v18.0/" + phone_number_id + "/messages"
             headers = {
                 "Authorization": "Bearer " + bearer_token,
                 "Content-Type": "application/json",
@@ -958,7 +1137,7 @@ def send_whatsapp_bulk_messages_images(request):
                     "language": {"code": "en"},
                 },
             }
-            url = "https://graph.facebook.com/v19.0/" + phone_number_id + "/messages"
+            url = "https://graph.facebook.com/v18.0/" + phone_number_id + "/messages"
             headers = {
                 "Authorization": "Bearer " + bearer_token,
                 "Content-Type": "application/json",
@@ -1021,7 +1200,7 @@ def send_whatsapp_model_bulk_messages(request):
                 "template": {"name": template_name, "language": {"code": "en"}},
             }
 
-            url = "https://graph.facebook.com/v19.0/" + phone_number_id + "/messages"
+            url = "https://graph.facebook.com/v18.0/" + phone_number_id + "/messages"
             headers = {
                 "Authorization": "Bearer " + bearer_token,
                 "Content-Type": "application/json",
@@ -1107,7 +1286,7 @@ def send_whatsapp_model_bulk_messages_images(request):
             }
             # #print(data)
 
-            url = "https://graph.facebook.com/v19.0/" + phone_number_id + "/messages"
+            url = "https://graph.facebook.com/v18.0/" + phone_number_id + "/messages"
             headers = {
                 "Authorization": "Bearer " + bearer_token,
                 "Content-Type": "application/json",
@@ -1155,7 +1334,7 @@ def get_templates_message(request):
 
     # print(template_image_array)
 
-    url = "https://graph.facebook.com/v19.0/" + business_id + "/message_templates"
+    url = "https://graph.facebook.com/v18.0/" + business_id + "/message_templates"
     headers = {
         "Authorization": "Bearer " + bearer_token,
     }
@@ -1191,7 +1370,7 @@ def get_templates_list(request):
     business_id = get_credential[0]["whatsapp_business_id"]
     bearer_token = get_credential[0]["permanent_access_token"]
 
-    url = "https://graph.facebook.com/v19.0/" + business_id + "/message_templates"
+    url = "https://graph.facebook.com/v18.0/" + business_id + "/message_templates"
     headers = {
         "Authorization": "Bearer " + bearer_token,
     }
@@ -1222,7 +1401,7 @@ def create_text_template(request):
     business_id = get_credential[0]["whatsapp_business_id"]
     bearer_token = get_credential[0]["permanent_access_token"]
     facebook_api_url = (
-        "https://graph.facebook.com/v19.0/" + business_id + "/message_templates"
+        "https://graph.facebook.com/v18.0/" + business_id + "/message_templates"
     )
     serializer = MessageTextTemplateSerializer(data=request.data)
 
@@ -1288,7 +1467,7 @@ def create_image_template(request):
     bearer_token = get_credential[0]["permanent_access_token"]
 
     facebook_api_url = (
-        "https://graph.facebook.com/v19.0/" + business_id + "/message_templates"
+        "https://graph.facebook.com/v18.0/" + business_id + "/message_templates"
     )
     serializer = MessageTemplateSerializer(data=request.data)
 
@@ -1350,7 +1529,7 @@ def create_image_template_url(request):
     bearer_token = get_credential[0]["permanent_access_token"]
 
     facebook_api_url = (
-        "https://graph.facebook.com/v19.0/" + business_id + "/message_templates"
+        "https://graph.facebook.com/v18.0/" + business_id + "/message_templates"
     )
     serializer = MessageTemplateSerializer(data=request.data)
 
@@ -1424,7 +1603,7 @@ def create_image_template_call(request):
     bearer_token = get_credential[0]["permanent_access_token"]
 
     facebook_api_url = (
-        "https://graph.facebook.com/v19.0/" + business_id + "/message_templates"
+        "https://graph.facebook.com/v18.0/" + business_id + "/message_templates"
     )
     serializer = MessageTemplateSerializer(data=request.data)
 
@@ -1498,7 +1677,7 @@ def create_image_template_personalised(request):
     bearer_token = get_credential[0]["permanent_access_token"]
 
     facebook_api_url = (
-        "https://graph.facebook.com/v19.0/" + business_id + "/message_templates"
+        "https://graph.facebook.com/v18.0/" + business_id + "/message_templates"
     )
     serializer = MessageTemplateSerializer(data=request.data)
 
@@ -1568,7 +1747,7 @@ def create_text_template_button_site(request):
     bearer_token = get_credential[0]["permanent_access_token"]
 
     facebook_api_url = (
-        "https://graph.facebook.com/v19.0/" + business_id + "/message_templates"
+        "https://graph.facebook.com/v18.0/" + business_id + "/message_templates"
     )
     serializer = MessageTemplateSerializer(data=request.data)
 
@@ -1644,7 +1823,7 @@ def create_text_template_button_call(request):
     bearer_token = get_credential[0]["permanent_access_token"]
 
     facebook_api_url = (
-        "https://graph.facebook.com/v19.0/" + business_id + "/message_templates"
+        "https://graph.facebook.com/v18.0/" + business_id + "/message_templates"
     )
     serializer = MessageTemplateSerializer(data=request.data)
 
@@ -1715,7 +1894,7 @@ def create_text_template_personalised(request):
     business_id = get_credential[0]["whatsapp_business_id"]
     bearer_token = get_credential[0]["permanent_access_token"]
     facebook_api_url = (
-        "https://graph.facebook.com/v19.0/" + business_id + "/message_templates"
+        "https://graph.facebook.com/v18.0/" + business_id + "/message_templates"
     )
     serializer = MessageTextTemplateSerializer(data=request.data)
 
@@ -1777,7 +1956,7 @@ def create_text_template_button_site_personalised(request):
     bearer_token = get_credential[0]["permanent_access_token"]
 
     facebook_api_url = (
-        "https://graph.facebook.com/v19.0/" + business_id + "/message_templates"
+        "https://graph.facebook.com/v18.0/" + business_id + "/message_templates"
     )
     serializer = MessageTemplateSerializer(data=request.data)
 
@@ -1854,7 +2033,7 @@ def create_text_template_button_call_personalised(request):
     bearer_token = get_credential[0]["permanent_access_token"]
 
     facebook_api_url = (
-        "https://graph.facebook.com/v19.0/" + business_id + "/message_templates"
+        "https://graph.facebook.com/v18.0/" + business_id + "/message_templates"
     )
     serializer = MessageTemplateSerializer(data=request.data)
 
@@ -1931,7 +2110,7 @@ def create_document_template(request):
     bearer_token = get_credential[0]["permanent_access_token"]
 
     facebook_api_url = (
-        "https://graph.facebook.com/v19.0/" + business_id + "/message_templates"
+        "https://graph.facebook.com/v18.0/" + business_id + "/message_templates"
     )
     serializer = MessageTemplateSerializer(data=request.data)
 
@@ -2168,7 +2347,7 @@ def schedule_api_call(request):
 #             "template": {"name": "developer_test", "language": {"code": "en"}},
 #         }
 
-#         url = "https://graph.facebook.com/v19.0/123004784227116/messages"
+#         url = "https://graph.facebook.com/v18.0/123004784227116/messages"
 #         headers = {
 #             "Authorization": "Bearer "
 #             + bearer_token,  # Include the Bearer token in the headers
@@ -2299,21 +2478,92 @@ class CheckTokenValidityView(APIView):
 class CheckNotifications(APIView):
     def get(self, request):
         userid = request.GET.get("userid")
-
         if not userid:
             return Response(
                 {"error": "Userid not provided"}, status=status.HTTP_400_BAD_REQUEST
             )
 
         if userid:
-            print("try")
-            notification = Notification.objects.filter(user__id=userid)
-            notifications = [{"notification": data.message} for data in notification]
-            print(notification)
+            unread_notifications = Notification.objects.filter(
+                user__id=userid, is_read=False
+            )
+            read_notification = Notification.objects.filter(
+                user__id=userid, is_read=True
+            )
 
-            return JsonResponse(notifications, safe=False, status=status.HTTP_200_OK)
+            non_read_notificationsjson = [
+                {"notification": data.message, "id": data.id}
+                for data in unread_notifications
+            ]
+            read_notificationsjson = [
+                {"notification": data.message, "id": data.id}
+                for data in read_notification
+            ]
+
+            return JsonResponse(
+                {"read": read_notificationsjson, "unread": non_read_notificationsjson},
+                safe=False,
+                status=status.HTTP_200_OK,
+            )
 
         else:
             return JsonResponse(
                 {"notification": "no notification"}, status=status.HTTP_401_UNAUTHORIZED
             )
+
+
+class MarkNotificationAsRead(APIView):
+    def post(self, request, notification_id):
+        try:
+            notification = Notification.objects.get(id=notification_id)
+        except Notification.DoesNotExist:
+            return Response(
+                {"error": "Notification not found"}, status=status.HTTP_404_NOT_FOUND
+            )
+
+        notification.is_read = not notification.is_read
+        notification.save()
+
+        return Response(
+            {"success": "Notification marked as read"}, status=status.HTTP_200_OK
+        )
+
+    def delete(self, request, notification_id):
+        try:
+            notification = Notification.objects.get(id=notification_id)
+        except Notification.DoesNotExist:
+            return Response(
+                {"error": "Notification not found"}, status=status.HTTP_404_NOT_FOUND
+            )
+
+        notification.delete()
+
+        return Response(
+            {"success": "Notification deleted"}, status=status.HTTP_204_NO_CONTENT
+        )
+
+
+class PlanPurchaseDetail(APIView):
+    def get_object(self, pk):
+        try:
+            return PlanPurchase.objects.get(pk=pk)
+        except PlanPurchase.DoesNotExist:
+            raise Http404
+
+    def get(self, request, pk=None, format=None):
+        if pk:
+            plan_purchase = self.get_object(pk)
+            serializer = PlanPurchaseSerializer(plan_purchase)
+            return Response(serializer.data)
+        else:
+            # Retrieve all plan purchases
+            plan_purchases = PlanPurchase.objects.all()
+            serializer = PlanPurchaseSerializer(plan_purchases, many=True)
+            return Response(serializer.data)
+
+    def post(self, request, pk=None, format=None):
+        serializer = PlanPurchaseSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

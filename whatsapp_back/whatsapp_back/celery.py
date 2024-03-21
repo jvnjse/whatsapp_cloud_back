@@ -1,10 +1,13 @@
-import os
+# celery.py
 
+import os
 from celery import Celery
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "whatsapp_back.settings")
 
 app = Celery("whatsapp_back")
+
+app.conf.timezone = "Asia/Kolkata"
 
 app.config_from_object("django.conf:settings", namespace="CELERY")
 

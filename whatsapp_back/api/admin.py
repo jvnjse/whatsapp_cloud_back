@@ -6,6 +6,7 @@ from .models import (
     Template,
     ContactForm,
     Notification,
+    PlanPurchase,
 )
 
 # Register your models here.
@@ -15,3 +16,4 @@ admin.site.register(WhatsappCredential)
 admin.site.register(Template)
 admin.site.register(ContactForm)
 admin.site.register(Notification)
+admin.site.register(PlanPurchase)

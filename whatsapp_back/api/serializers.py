@@ -1,12 +1,15 @@
 from rest_framework import serializers
-from .models import PhoneNumber, CustomUser, Template, ContactForm
+from .models import PhoneNumber, CustomUser, Template, ContactForm, PlanPurchase
 import random
 import string
-from django.core.mail import send_mail, EmailMultiAlternatives
-from django.template.loader import render_to_string
-from django.utils.html import strip_tags
-from django.conf import settings
+from .functions.tasks import send_email
+
+# from django.core.mail import send_mail, EmailMultiAlternatives
+# from django.template.loader import render_to_string
+# from django.utils.html import strip_tags
+# from django.conf import settings
 import datetime
+import pandas as pd
 
 
 class CustomUserSerializer(serializers.ModelSerializer):
@@ -24,9 +27,12 @@ class CustomUserSerializer(serializers.ModelSerializer):
             "last_name",
             "phone",
             "company_name",
-            "known_by",
+            "trial_plan",
             "referral_string",
             "register_date",
+            "basic_feature",
+            "standard_feature",
+            "advanced_feature",
         )
         # extra_kwargs = {"password": {"write_only": True}}
 
@@ -40,8 +46,18 @@ class CustomUserSerializer(serializers.ModelSerializer):
         is_distributor = validated_data.get("is_distributor", False)
         phone = validated_data.get("phone")
         company_name = validated_data.get("company_name")
-        known_by = validated_data.get("known_by")
+        trial_plan = validated_data.get("trial_plan")
         referral_string = validated_data.get("referral_string")
+        basic_feature = False
+        standard_feature = False
+        advanced_feature = False
+
+        if trial_plan == "basic":
+            basic_feature = True
+        elif trial_plan == "standard":
+            standard_feature = True
+        elif trial_plan == "advanced":
+            advanced_feature = True
 
         password = "".join(
             random.choice(string.ascii_letters + string.digits) for _ in range(6)
@@ -56,8 +72,11 @@ class CustomUserSerializer(serializers.ModelSerializer):
             is_distributor=is_distributor,
             phone=phone,
             company_name=company_name,
-            known_by=known_by,
+            trial_plan=trial_plan,
             trial_user=trial_user,
+            basic_feature=basic_feature,
+            standard_feature=standard_feature,
+            advanced_feature=advanced_feature,
         )
         instance.set_password(password)
 
@@ -68,22 +87,8 @@ class CustomUserSerializer(serializers.ModelSerializer):
                 instance.save()
             except CustomUser.DoesNotExist:
                 pass
-        my_subject = "Whatsapp Module Generated Password"
-        context = {
-            "password": password,
-        }
-        recipient_list = [email]
-        html_message = render_to_string("password.html", context)
-        plain_message = strip_tags(html_message)
-        message = EmailMultiAlternatives(
-            subject=my_subject,
-            body=plain_message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=recipient_list,
-        )
-        message.attach_alternative(html_message, "text/html")
-        message.send()
 
+        send_email.delay(email, password)
         instance.register_date = datetime.date.today()
         instance.save()
         return instance
@@ -101,6 +106,7 @@ class CustomUserDetailSerializer(serializers.ModelSerializer):
             "basic_feature",
             "standard_feature",
             "advanced_feature",
+            "trial_user",
         )
 
 
@@ -206,3 +212,26 @@ class ContactFormSerializer(serializers.ModelSerializer):
     class Meta:
         model = ContactForm
         fields = "__all__"
+
+
+class PlanPurchaseSerializer(serializers.ModelSerializer):
+    user_first_name = serializers.SerializerMethodField()
+    user_last_name = serializers.SerializerMethodField()
+
+    def get_user_first_name(self, obj):
+        return obj.user.first_name
+
+    def get_user_last_name(self, obj):
+        return obj.user.last_name
+
+    class Meta:
+        model = PlanPurchase
+        fields = [
+            "id",
+            "user",
+            "user_first_name",
+            "user_last_name",
+            "plan",
+            "started_date",
+            "image",
+        ]
