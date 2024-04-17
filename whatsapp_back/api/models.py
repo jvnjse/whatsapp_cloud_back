@@ -108,6 +108,7 @@ class WhatsappCredential(models.Model):
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
     phone_number_id = models.CharField(max_length=30)
     whatsapp_business_id = models.CharField(max_length=30)
+    app_id = models.CharField(max_length=30, null=True, blank=True)
     permanent_access_token = models.CharField(max_length=500)
 
     def __str__(self):
@@ -117,7 +118,7 @@ class WhatsappCredential(models.Model):
 class Template(models.Model):
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
     template_name = models.CharField(max_length=30)
-    template_image = models.ImageField(upload_to="template_image", null=True)
+    template_image = models.FileField(upload_to="template_image", null=True)
 
     def __str__(self):
         return str(self.template_name)

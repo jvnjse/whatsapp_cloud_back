@@ -46,7 +46,11 @@ from django.contrib.auth import authenticate
 import urllib.parse
 import base64, os, random, string, jwt
 from .functions.trial_notifications import check_trial_period
-from .functions.tasks import send_message_to_facebook,send_email
+from .functions.tasks import (
+    send_message_to_facebook_excel_normal,
+    send_email,
+    send_message_to_facebook_excel_images,
+)
 import pandas as pd
 
 
@@ -73,7 +77,7 @@ bearer_token = config("TOKEN")
 phone_number_id = config("PHONE_NO_ID")
 business_id = config("BUSINESS_ID")
 # domain_url = "http://127.0.0.1:8000"
-domain_url = "https://altosconnectweb.com"
+domain_url = "https://altosconnectweb.in"
 
 
 def get_tokens_for_user(user):
@@ -91,7 +95,10 @@ def get_tokens_for_user(user):
 def get_credentials(user_id):
     try:
         credentials = WhatsappCredential.objects.filter(user_id=user_id).values(
-            "phone_number_id", "whatsapp_business_id", "permanent_access_token"
+            "phone_number_id",
+            "whatsapp_business_id",
+            "permanent_access_token",
+            "app_id",
         )
         if credentials:
             return credentials
@@ -137,6 +144,7 @@ def upload_credentials(request):
                 credentials.phone_number_id = serializer.validated_data[
                     "phone_number_id"
                 ]
+                credentials.app_id = serializer.validated_data["app_id"]
                 credentials.save()
 
             except WhatsappCredential.DoesNotExist:
@@ -333,71 +341,196 @@ class ViewReferralStringAPIView(APIView):
 
 
 # class EditReferralStringAPIView(APIView):
+import magic
 
 
-# def image_upload(request):
 @api_view(["POST"])
-@permission_classes([IsAuthenticated])
 def upload_image(request):
     user_id = request.GET.get("user_id")
     get_credential = get_credentials(user_id)
     bearer_token = get_credential[0]["permanent_access_token"]
+    app_id = get_credential[0]["app_id"]
+    user_access_token = request.data.get("access_token")
+    uploaded_file = request.data.get("template_image")
+    template_name = request.data.get("template_name")
+    file_length = uploaded_file.size
+    file_type = magic.from_buffer(uploaded_file.read(1024), mime=True)
+    # file_length = request.data.get("file_length")
+    # file_type = request.data.get("file_type")
+    # image_file = request.FILES.get("image_file")
 
-    bearer_token = urllib.parse.quote(bearer_token, safe="")
-    url1 = (
-        "https://graph.facebook.com/v18.0/430156919463638/uploads?access_token="
-        + bearer_token
-        + "&file_length=20000&file_type=image/png"
-    )
+    # Step 1: Create a Session
+    print(uploaded_file)
+    url1 = f"https://graph.facebook.com/v19.0/{app_id}/uploads"
+    headers1 = {"Content-Type": "application/x-www-form-urlencoded"}
+    params1 = {
+        "file_length": "20000",
+        "file_type": file_type,
+        "access_token": bearer_token,
+    }
+    print(params1)
+    response1 = requests.post(url1, headers=headers1, params=params1)
 
-    response1 = requests.post(url1)
+    print(response1.json())
 
     if response1.status_code != 200:
-        # print(response1.text)
-        return JsonResponse(
-            {"error": "Failed to make the first POST request"}, status=500
-        )
+        return Response({"error": "Failed to create a session"}, status=500)
 
-    try:
-        response1_data = response1.json()
-        # print(response1_data)
-        upload_session_key = response1_data["id"]
-    except ValueError:
-        return JsonResponse({"error": "Invalid JSON in the first response"}, status=500)
+    upload_session_id = response1.json().get("id")
 
-    serializer = ImageUploadSerializer(data=request.data)
-    if serializer.is_valid():
-        image_file = serializer.validated_data["template_image"]
-        template_name = serializer.validated_data["template_name"]
-        content = image_file.read()
+    url2 = f"https://graph.facebook.com/v19.0/{upload_session_id}"
+    headers2 = {"Authorization": f"OAuth {bearer_token}", "file_offset": "0"}
+    files2 = {"source": uploaded_file}
+    response2 = requests.post(url2, headers=headers2, files=files2)
+    print(response2.json())
+    template = Template.objects.create(
+        template_image=uploaded_file, template_name=template_name, user=request.user
+    )
 
-        file_name = os.path.basename(image_file.name)
+    if response2.status_code != 200:
+        return Response({"error": "Failed to initiate upload"}, status=500)
 
-        encoded_string = base64.b64encode(content).decode("utf-8")
+    file_handle = response2.json().get("h")
 
-        data_url = f"data:image;base64,{encoded_string}"
+    return Response({"h": file_handle})
 
-        url2 = "https://graph.facebook.com/v18.0/" + upload_session_key
-        headers = {"Authorization": "OAuth " + bearer_token, "file_offset": "0"}
 
-        # files = {"source": (file_name, open(file_name, "rb"))}
-        files = {"source": data_url}
-        response2 = requests.post(url2, headers=headers, files=files)
-        serializer.save(user=request.user)
+# def image_upload(request):
+# @api_view(["POST"])
+# @permission_classes([IsAuthenticated])
+# def upload_image(request):
+#     user_id = request.GET.get("user_id")
+#     get_credential = get_credentials(user_id)
+#     bearer_token = get_credential[0]["permanent_access_token"]
+#     app_id = get_credential[0]["app_id"]
 
-        if response2.status_code != 200:
-            return JsonResponse({"error": response2.json()}, status=500)
+#     bearer_token = urllib.parse.quote(bearer_token, safe="")
+#     url1 = (
+#         f"https://graph.facebook.com/v18.0/{app_id}/uploads?access_token="
+#         + bearer_token
+#     )
 
-        try:
-            response2_data = response2.json()
-            # print(response2_data)
-            return JsonResponse(response2_data)
-        except ValueError:
-            return JsonResponse(
-                {"error": "Invalid JSON in the second response"}, status=500
-            )
+#     # Inspect uploaded file to determine file length and type
+#     uploaded_file = request.data.get("template_image")
+#     file_length = uploaded_file.size
+#     file_type = magic.from_buffer(uploaded_file.read(1024), mime=True)
 
-    return JsonResponse({"error": "Invalid data"}, status=400)
+#     # Add file_length and file_type to the URL
+#     url1 += f"&file_length={file_length}&file_type={file_type}"
+#     print(url1)
+
+#     response1 = requests.post(url1)
+
+#     if response1.status_code != 200:
+#         return JsonResponse(
+#             {"error": "Failed to make the first POST request"}, status=500
+#         )
+
+#     try:
+#         response1_data = response1.json()
+#         upload_session_key = response1_data["id"]
+#         print(upload_session_key)
+#     except ValueError:
+#         return JsonResponse({"error": "Invalid JSON in the first response"}, status=500)
+
+#     serializer = ImageUploadSerializer(data=request.data)
+#     if serializer.is_valid():
+#         image_file = serializer.validated_data["template_image"]
+#         template_name = serializer.validated_data["template_name"]
+#         content = image_file.read()
+#         files = {'source': (uploaded_file.name, uploaded_file)}
+
+#         file_name = os.path.basename(image_file.name)
+
+#         encoded_string = base64.b64encode(content).decode("utf-8")
+
+#         data_url = f"data:image;base64,{encoded_string}"
+
+#         url2 = "https://graph.facebook.com/v18.0/" + upload_session_key
+#         headers = {"Authorization": "OAuth " + bearer_token, "file_offset": "0"}
+
+#         files = {"source": data_url}
+#         response2 = requests.post(url2, headers=headers, files=files)
+#         serializer.save(user=request.user)
+
+#         if response2.status_code != 200:
+#             return JsonResponse({"error": response2.json()}, status=500)
+
+#         try:
+#             response2_data = response2.json()
+#             return JsonResponse(response2_data)
+#         except ValueError:
+#             return JsonResponse(
+#                 {"error": "Invalid JSON in the second response"}, status=500
+#             )
+
+#     return JsonResponse({"error": "Invalid data"}, status=400)
+
+
+# @api_view(["POST"])
+# @permission_classes([IsAuthenticated])
+# def upload_image(request):
+#     user_id = request.GET.get("user_id")
+#     get_credential = get_credentials(user_id)
+#     bearer_token = get_credential[0]["permanent_access_token"]
+#     app_id = get_credential[0]["app_id"]
+
+#     bearer_token = urllib.parse.quote(bearer_token, safe="")
+#     url1 = (
+#         f"https://graph.facebook.com/v18.0/{app_id}/uploads?access_token="
+#         + bearer_token
+#         + "&file_length=20000&file_type=image/png"
+#     )
+
+#     response1 = requests.post(url1)
+
+#     if response1.status_code != 200:
+#         # print(response1.text)
+#         return JsonResponse(
+#             {"error": "Failed to make the first POST request"}, status=500
+#         )
+
+#     try:
+#         response1_data = response1.json()
+#         # print(response1_data)
+#         upload_session_key = response1_data["id"]
+#     except ValueError:
+#         return JsonResponse({"error": "Invalid JSON in the first response"}, status=500)
+
+#     serializer = ImageUploadSerializer(data=request.data)
+#     if serializer.is_valid():
+#         image_file = serializer.validated_data["template_image"]
+#         template_name = serializer.validated_data["template_name"]
+#         content = image_file.read()
+
+
+#         file_name = os.path.basename(image_file.name)
+
+#         encoded_string = base64.b64encode(content).decode("utf-8")
+
+#         data_url = f"data:image;base64,{encoded_string}"
+
+#         url2 = "https://graph.facebook.com/v18.0/" + upload_session_key
+#         headers = {"Authorization": "OAuth " + bearer_token, "file_offset": "0"}
+
+#         # files = {"source": (file_name, open(file_name, "rb"))}
+#         files = {"source": data_url}
+#         response2 = requests.post(url2, headers=headers, files=files)
+#         serializer.save(user=request.user)
+
+#         if response2.status_code != 200:
+#             return JsonResponse({"error": response2.json()}, status=500)
+
+#         try:
+#             response2_data = response2.json()
+#             # print(response2_data)
+#             return JsonResponse(response2_data)
+#         except ValueError:
+#             return JsonResponse(
+#                 {"error": "Invalid JSON in the second response"}, status=500
+#             )
+
+#     return JsonResponse({"error": "Invalid data"}, status=400)
 
 
 @api_view(["POST"])
@@ -468,7 +601,7 @@ class PhoneNumberUpload(APIView):
             for row in worksheet.iter_rows(values_only=True):
                 raw_number = str(row[0])
                 raw_number = raw_number.replace(" ", "")
-                # #print(raw_number)
+                # print(raw_number)
                 # replace 0 and add +91
                 if raw_number.startswith("0"):
                     raw_number = "+91" + raw_number[1:]
@@ -485,11 +618,6 @@ class PhoneNumberUpload(APIView):
             )
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-
-
-
 
 
 # @shared_task
@@ -565,8 +693,7 @@ def excel_sent_message(request):
             excel = read_file(excel_data)
 
             try:
-                print("Cdsdc")
-                send_message_to_facebook.delay(
+                send_message_to_facebook_excel_normal.delay(
                     excel, template_name, user_id, phone_number_id, bearer_token
                 )
             except Exception as e:
@@ -580,137 +707,6 @@ def excel_sent_message(request):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
-
-
-# @api_view(["POST"])
-# @permission_classes([IsAuthenticated])
-# def excel_sent_message(request):
-#     try:
-#         serializer = ExcelSerializer(data=request.data)
-#         if serializer.is_valid():
-#             excel_file = serializer.validated_data["excel_file"]
-#             template_name = serializer.validated_data["template_name"]
-#             user_id = serializer.validated_data["user_id"]
-#             get_credential = get_credentials(user_id)
-#             phone_number_id = get_credential[0]["phone_number_id"]
-
-#             # Trigger Celery task
-#             process_excel_file_and_send_messages.delay(excel_file, template_name, user_id,phone_number_id)
-
-#             return Response(
-#                 {"message": "Task submitted for processing"},
-#                 status=status.HTTP_202_ACCEPTED,
-#             )
-#         else:
-#             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-#     except Exception as e:
-#         return JsonResponse({"error": str(e)}, status=500)
-import asyncio
-import aiohttp
-
-from asgiref.sync import sync_to_async
-
-# from asgiref.sync import async_to_sync
-# from django.utils.decorators import async_view
-
-# @csrf_exempt
-
-# def excel_sent_message_sync(request):
-#     return async_to_sync(excel_sent_message)(request)
-
-
-# @api_view(["POST"])
-# @permission_classes([IsAuthenticated])
-# async def excel_sent_message(request):
-#     try:
-#         serializer = ExcelSerializer(data=request.data)
-
-#         if serializer.is_valid():
-#             excel_file = serializer.validated_data["excel_file"]
-#             template_name = serializer.validated_data["template_name"]
-#             user_id = serializer.validated_data["user_id"]
-#             get_credential = get_credentials(user_id)
-#             phone_number_id = get_credential[0]["phone_number_id"]
-#             bearer_token = get_credential[0]["permanent_access_token"]
-
-#             print(excel_file)
-#             excel = read_file(excel_file)
-
-#             results = []
-#             tasks = []
-
-#             for index, row in excel.iterrows():
-#                 for column, value in row.items():
-#                     raw_number = str(value)
-#                     raw_number = raw_number.replace(" ", "")
-
-#                     if raw_number is None:
-#                         continue
-
-#                     if (raw_number.startswith("91")) and (len(raw_number) == 12):
-#                         raw_number = "+" + raw_number
-#                     else:
-#                         raw_number = "+91" + raw_number
-
-#                     if raw_number.startswith("0"):
-#                         raw_number = "+91" + raw_number[1:]
-
-#                     print(raw_number)
-#                     await sync_to_async(PhoneNumber.objects.get_or_create)(
-#                         number=raw_number, user_id=user_id
-#                     )
-
-#                     data = {
-#                         "messaging_product": "whatsapp",
-#                         "recipient_type": "individual",
-#                         "to": raw_number,
-#                         "type": "template",
-#                         "template": {"name": template_name, "language": {"code": "en"}},
-#                     }
-
-#                     url = (
-#                         "https://graph.facebook.com/v18.0/"
-#                         + phone_number_id
-#                         + "/messages"
-#                     )
-#                     headers = {
-#                         "Authorization": "Bearer " + bearer_token,
-#                         "Content-Type": "application/json",
-#                     }
-
-#                     tasks.append(
-#                         asyncio.create_task(
-#                             send_whatsapp_message(url, headers, data, results)
-#                         )
-#                     )
-
-#             await asyncio.gather(*tasks)
-
-#             return JsonResponse(
-#                 {"message": "Phone numbers imported successfully"},
-#                 status=status.HTTP_201_CREATED,
-#             )
-#         else:
-#             return JsonResponse(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-#     except Exception as e:
-#         return Response({"error": str(e)}, status=500)
-
-
-# async def send_whatsapp_message(url, headers, data, results):
-#     async with aiohttp.ClientSession() as session:
-#         try:
-#             async with session.post(url, headers=headers, json=data) as response:
-#                 response_data = await response.json()
-#                 results.append(response_data)
-#                 return Response(
-#                     {"message": "Phone numbers imported successfully"},
-#                     status=status.HTTP_201_CREATED,
-#                 )
-#         except json.JSONDecodeError:
-#             return Response(
-#                 {"message": "Phone numbers imported successfully"},
-#                 status=status.HTTP_201_CREATED,
-#             )
 
 
 @api_view(["POST"])
@@ -807,68 +803,78 @@ def excel_sent_message_images(request):
             phone_number_id = get_credential[0]["phone_number_id"]
             # business_id = get_credential[0]["whatsapp_business_id"]
             bearer_token = get_credential[0]["permanent_access_token"]
+            excel = read_file(excel_file)
 
-            workbook = load_workbook(excel_file, read_only=True)
-            worksheet = workbook.active
-            results = []
+            # workbook = load_workbook(excel_file, read_only=True)
+            # worksheet = workbook.active
+            # results = []
             template_instance = get_object_or_404(Template, template_name=template_name)
             image_link_get = f"{domain_url}{template_instance.template_image.url}"
-            for row in worksheet.iter_rows(values_only=True):
-                raw_number = str(row[0])
-                raw_number = raw_number.replace(" ", "")
-                # #print(raw_number)
+            # send_message_to_facebook_excel_images(excel)
 
-                # replace 0 and add +91
-                if raw_number.startswith("0"):
-                    raw_number = "+91" + raw_number[1:]
-                # if no +91 add +91
-                if not raw_number.startswith("+91"):
-                    raw_number = "+91" + raw_number
-                # model save
-                # PhoneNumber.objects.get_or_create(number=raw_number)
-                # print(raw_number)
-                PhoneNumber.objects.get_or_create(number=raw_number, user_id=user_id)
-
-                data = {
-                    "messaging_product": "whatsapp",
-                    "recipient_type": "individual",
-                    "to": raw_number,
-                    "type": "template",
-                    "template": {
-                        "name": template_name,
-                        "components": [
-                            {
-                                "type": "header",
-                                "parameters": [
-                                    {
-                                        "type": "image",
-                                        "image": {"link": image_link_get},
-                                    }
-                                ],
-                            }
-                        ],
-                        "language": {"code": "en"},
-                    },
-                }
-                # #print(data)
-
-                url = (
-                    "https://graph.facebook.com/v18.0/" + phone_number_id + "/messages"
+            try:
+                # print("Cdsdc")
+                send_message_to_facebook_excel_images.delay(
+                    excel,
+                    template_name,
+                    user_id,
+                    phone_number_id,
+                    bearer_token,
+                    image_link_get,
                 )
-                headers = {
-                    "Authorization": "Bearer " + bearer_token,
-                    "Content-Type": "application/json",
-                }
+            except Exception as e:
+                return HttpResponse(str(e), status=500)
 
-                try:
-                    response = requests.post(url, headers=headers, json=data)
-                    response_data = response.json()
-                    results.append(response_data)
+            # for row in worksheet.iter_rows(values_only=True):
+            #     raw_number = str(row[0])
+            #     raw_number = raw_number.replace(" ", "")
+            #     if raw_number.startswith("0"):
+            #         raw_number = "+91" + raw_number[1:]
+            #     if not raw_number.startswith("+91"):
+            #         raw_number = "+91" + raw_number
 
-                except json.JSONDecodeError:
-                    return JsonResponse({"error": "Invalid JSON data"}, status=400)
+            #     PhoneNumber.objects.get_or_create(number=raw_number, user_id=user_id)
+
+            #     data = {
+            #         "messaging_product": "whatsapp",
+            #         "recipient_type": "individual",
+            #         "to": raw_number,
+            #         "type": "template",
+            #         "template": {
+            #             "name": template_name,
+            #             "components": [
+            #                 {
+            #                     "type": "header",
+            #                     "parameters": [
+            #                         {
+            #                             "type": "image",
+            #                             "image": {"link": image_link_get},
+            #                         }
+            #                     ],
+            #                 }
+            #             ],
+            #             "language": {"code": "en"},
+            #         },
+            #     }
+            #     # #print(data)
+
+            #     url = (
+            #         "https://graph.facebook.com/v18.0/" + phone_number_id + "/messages"
+            #     )
+            #     headers = {
+            #         "Authorization": "Bearer " + bearer_token,
+            #         "Content-Type": "application/json",
+            #     }
+
+            #     try:
+            #         response = requests.post(url, headers=headers, json=data)
+            #         response_data = response.json()
+            #         results.append(response_data)
+
+            #     except json.JSONDecodeError:
+            #         return JsonResponse({"error": "Invalid JSON data"}, status=400)
             return Response(
-                {"message": results},
+                {"message": "Phone numbers import task queued successfully"},
                 status=status.HTTP_201_CREATED,
             )
         else:
@@ -1080,6 +1086,8 @@ def send_whatsapp_bulk_messages(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def send_whatsapp_bulk_messages_images(request):
+    template_format = request.GET.get("template_format")
+    print("hiii", template_format)
     try:
         serializer = WhatsAppBulkMessageImageSerializer(data=request.data)
 
@@ -1095,8 +1103,8 @@ def send_whatsapp_bulk_messages_images(request):
 
             # #print(template_name)
             results = []
-            template_instance = get_object_or_404(Template, template_name=template_name)
-            image_link_get = f"{domain_url}{template_instance.template_image.url}"
+            # template_instance = get_object_or_404(Template, template_name=template_name)
+            # image_link_get = f"{domain_url}{template_instance.template_image.url}"
 
         for number in numbers:
             if number.startswith("0"):
@@ -1117,26 +1125,34 @@ def send_whatsapp_bulk_messages_images(request):
                 "type": "template",
                 "template": {
                     "name": template_name,
-                    "components": [
-                        # {
-                        #     "type": "HEADER",
-                        #     # "format": "TEXT",
-                        #     "parameters": [{"type": "text", "text": "MANU"}]
-                        #     # "example": {"header_text": ["Jeevan"]},
-                        # }
+                    **(
                         {
-                            "type": "header",
-                            "parameters": [
+                            "components": [
                                 {
-                                    "type": "image",
-                                    "image": {"link": image_link_get},
+                                    "type": "header",
+                                    "parameters": [
+                                        {
+                                            "type": template_format,
+                                            template_format: {
+                                                "link": image_link,
+                                                **(
+                                                    {"filename": "filename.pdf"}
+                                                    if template_format == "document"
+                                                    else {}
+                                                ),
+                                            },
+                                        }
+                                    ],
                                 }
-                            ],
+                            ]
                         }
-                    ],
+                        if template_format != "text"
+                        else {}
+                    ),
                     "language": {"code": "en"},
                 },
             }
+            print(data)
             url = "https://graph.facebook.com/v18.0/" + phone_number_id + "/messages"
             headers = {
                 "Authorization": "Bearer " + bearer_token,
@@ -1147,6 +1163,7 @@ def send_whatsapp_bulk_messages_images(request):
                 response = requests.post(url, headers=headers, json=data)
                 response_data = response.json()
                 results.append(response_data)
+                print(results)
             except requests.exceptions.RequestException as e:
                 results.append({"error": str(e)})
             except json.JSONDecodeError:
@@ -1273,10 +1290,7 @@ def send_whatsapp_model_bulk_messages_images(request):
                             "parameters": [
                                 {
                                     "type": "image",
-                                    "image": {
-                                        # "link": "https://i.ibb.co/23hxBhg/image.png"
-                                        "link": image_link_get
-                                    },
+                                    "image": {"link": image_link_get},
                                 }
                             ],
                         }
@@ -1457,12 +1471,40 @@ def create_text_template(request):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+# def create_post_data(template_name, header_text, body_text, footer_text, document_type):
+#     if document_type == "image":
+#         format_type = "IMAGE"
+#     elif document_type == "document":
+#         format_type = "DOCUMENT"
+#     elif document_type == "video":
+#         format_type = "VIDEO"
+#     else:
+#         format_type = "TEXT"
+
+#     post_data = {
+#         "name": template_name,
+#         "category": "MARKETING",
+#         "language": "en",
+#         "components": [
+#             {
+#                 "type": "HEADER",
+#                 "format": format_type,
+#                 "example": {"header_handle": header_text},
+#             },
+#             {"type": "BODY", "text": body_text},
+#             {"type": "FOOTER", "text": footer_text},
+#         ],
+#     }
+
+#     return json.dumps(post_data)
+
+
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def create_image_template(request):
     user_id = request.GET.get("user_id")
+    document_type = request.GET.get("type")
     get_credential = get_credentials(user_id)
-    # phone_number_id = get_credential[0]["phone_number_id"]
     business_id = get_credential[0]["whatsapp_business_id"]
     bearer_token = get_credential[0]["permanent_access_token"]
 
@@ -1478,8 +1520,6 @@ def create_image_template(request):
         body_text = data.get("body_text")
         footer_text = data.get("footer_text")
 
-        # print(header_text)
-
         post_data = json.dumps(
             {
                 "name": template_name,
@@ -1488,7 +1528,7 @@ def create_image_template(request):
                 "components": [
                     {
                         "type": "HEADER",
-                        "format": "IMAGE",
+                        "format": document_type,
                         "example": {"header_handle": header_text},
                     },
                     {"type": "BODY", "text": body_text},
@@ -1527,6 +1567,7 @@ def create_image_template_url(request):
     # phone_number_id = get_credential[0]["phone_number_id"]
     business_id = get_credential[0]["whatsapp_business_id"]
     bearer_token = get_credential[0]["permanent_access_token"]
+    document_type = request.GET.get("type")
 
     facebook_api_url = (
         "https://graph.facebook.com/v18.0/" + business_id + "/message_templates"
@@ -1541,7 +1582,6 @@ def create_image_template_url(request):
         footer_text = data.get("footer_text")
         button_text = data.get("button_text")
         button_url = data.get("button_url")
-        # print(template_name)
 
         post_data = json.dumps(
             {
@@ -1551,7 +1591,7 @@ def create_image_template_url(request):
                 "components": [
                     {
                         "type": "HEADER",
-                        "format": "IMAGE",
+                        "format": document_type,
                         "example": {"header_handle": header_text},
                     },
                     {"type": "BODY", "text": body_text},
@@ -1569,7 +1609,6 @@ def create_image_template_url(request):
                 ],
             }
         )
-        # print(post_data)
 
         headers = {
             "Content-Type": "application/json",
@@ -1598,6 +1637,7 @@ def create_image_template_url(request):
 def create_image_template_call(request):
     user_id = request.GET.get("user_id")
     get_credential = get_credentials(user_id)
+    document_type = request.GET.get("type")
     # phone_number_id = get_credential[0]["phone_number_id"]
     business_id = get_credential[0]["whatsapp_business_id"]
     bearer_token = get_credential[0]["permanent_access_token"]
@@ -1625,7 +1665,7 @@ def create_image_template_call(request):
                 "components": [
                     {
                         "type": "HEADER",
-                        "format": "IMAGE",
+                        "format": document_type,
                         "example": {"header_handle": header_text},
                     },
                     {"type": "BODY", "text": body_text},
@@ -2397,6 +2437,8 @@ def schedule_api_call(request):
 #         return HttpResponse("SUccess")
 #     else:
 #         return HttpResponse("ERROR")
+
+
 class ContactFormView(APIView):
     def get(self, request):
         contact_forms = ContactForm.objects.all()
@@ -2420,6 +2462,7 @@ def check_validation(request):
         phone_number_id = get_credential[0]["phone_number_id"]
         business_id = get_credential[0]["whatsapp_business_id"]
         bearer_token = get_credential[0]["permanent_access_token"]
+        app_id = get_credential[0]["app_id"]
 
         facebook_api_url = (
             "https://graph.facebook.com/v18.0/" + business_id + "/message_templates"
@@ -2444,6 +2487,7 @@ def check_validation(request):
                     "message": {
                         "phone_number_id": phone_number_id,
                         "business_id": business_id,
+                        "app_id": app_id,
                     },
                     "access": "added-not-valid",
                 },

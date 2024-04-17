@@ -169,6 +169,7 @@ class CredentialsSerializer(serializers.Serializer):
     phone_number_id = serializers.CharField()
     whatsapp_business_id = serializers.CharField()
     permanent_access_token = serializers.CharField()
+    app_id = serializers.CharField()
 
 
 class WhatsAppBulkMessageSerializer(serializers.Serializer):

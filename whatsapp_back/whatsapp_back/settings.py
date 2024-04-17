@@ -28,7 +28,7 @@ SECRET_KEY = "django-insecure-ynr1znbi4l^2(zes)$$rl@*t4bl_0!z2&6(qflc1p43pkux8zo
 DEBUG = True
 
 # ALLOWED_HOSTS = ["altosconnectweb.com", "altosconnectweb"]
-ALLOWED_HOSTS = ["127.0.0.1"]
+ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
 
 
 # Application definition
@@ -221,20 +221,19 @@ EMAIL_HOST_PASSWORD = "mbmxvoehxunkmvwh"
 # EMAIL_HOST_USER = "altostechnologies6@gmail.com"
 # EMAIL_HOST_PASSWORD = "jkdpqggohjsmhyay"
 
-CELERY_BROKER_URL = "redis://localhost:6379"
-CELERY_RESULT_BACKEND = "redis://localhost:6379"
-CELERY_BROKER_CONNECTION_RETRY = True  # Enable connection retries on startup
+CELERY_BROKER_URL = "redis://127.0.0.1:6379"
+CELERY_RESULT_BACKEND = "redis://127.0.0.1:6379"
+CELERY_BROKER_CONNECTION_RETRY = True
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
-CELERY_BROKER_CONNECTION_RETRY_MAX_RETRIES = 5  # Maximum number of retries
+CELERY_BROKER_CONNECTION_RETRY_MAX_RETRIES = 5
 CELERY_BROKER_CONNECTION_RETRY_INTERVAL = 10
-CELERY_TIMEZONE = "Asia/Kolkata"  # Time zone for Celery tasks
-CELERY_TASK_SERIALIZER = "json"  # Task serializer (JSON format)
-CELERY_RESULT_SERIALIZER = "json"  # Result serializer (JSON format)
-CELERY_ACCEPT_CONTENT = ["json"]  # Accepted content types for task messages
-CELERY_TASK_ACKS_LATE = True  # Acknowledge tasks after they have been executed
-CELERY_TASK_TRACK_STARTED = True  # Track the started state of tasks
+CELERY_TIMEZONE = "Asia/Kolkata"
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_ACKS_LATE = True
+CELERY_TASK_TRACK_STARTED = True
 CELERYD_PREFETCH_MULTIPLIER = 1
-# CELERY_BROKER_URL = "redis://localhost:6379/0"
 
 
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000
