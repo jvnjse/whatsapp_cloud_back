@@ -7,9 +7,12 @@ from .models import (
     ContactForm,
     Notification,
     PlanPurchase,
+    Blog,
+    ContactGroup,
 )
 
 # Register your models here.
+admin.site.register(Blog)
 admin.site.register(PhoneNumber)
 admin.site.register(CustomUser)
 admin.site.register(WhatsappCredential)
@@ -17,3 +20,4 @@ admin.site.register(Template)
 admin.site.register(ContactForm)
 admin.site.register(Notification)
 admin.site.register(PlanPurchase)
+admin.site.register(ContactGroup)

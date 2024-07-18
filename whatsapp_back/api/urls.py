@@ -3,6 +3,7 @@ from . import views
 from .views import *
 from django.conf import settings
 from django.conf.urls.static import static
+from django.conf.urls import handler404
 
 # from .views import (
 #     PhoneNumberUpload,
@@ -51,6 +52,11 @@ urlpatterns = [
     ),
     path("get_templates/", views.get_templates_message, name="get_templates_message"),
     path("get_templates/lists", views.get_templates_list, name="get_templates_list"),
+    path(
+        "get_templates/analytics",
+        views.get_templates_analytics,
+        name="get_templates_analytics",
+    ),
     path(
         "post_template/text",
         views.create_text_template,
@@ -189,4 +195,25 @@ urlpatterns = [
         ScheduleHelloView.as_view(),
         name="api_chedulke",
     ),
+    # blog
+    path("blogs/", BlogListCreateAPIView.as_view(), name="blog-list-create"),
+    path(
+        "blogs/<int:pk>/",
+        BlogRetrieveUpdateDestroyAPIView.as_view(),
+        name="blog-detail",
+    ),
+    path(
+        "contact-group/",
+        ContactGroupViewSet.as_view(),
+        name="contact-group",
+    ),
+    path(
+        "contact-group/<int:pk>/",
+        ContactGroupUpdateView.as_view(),
+        name="contact-group-update",
+    ),
+    path("blogs/published/", views.bloglist_published, name="bloglist_published"),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+
+handler404 = "api.views.custom_404"

@@ -6,6 +6,7 @@ from django.contrib.auth.models import (
 )
 import random
 import string
+import json
 
 
 def generate_referral_string():
@@ -156,3 +157,25 @@ class PlanPurchase(models.Model):
 
     def __str__(self):
         return f"{self.user} - {self.plan}"
+
+
+class Blog(models.Model):
+    link = models.CharField(max_length=100, unique=True)
+    blog_content = models.TextField()
+    published = models.BooleanField(default=False)
+
+
+class ContactGroup(models.Model):
+    # user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    name = models.CharField(max_length=255)
+    phone_numbers = models.TextField()
+
+    def set_phone_numbers(self, phone_numbers_list):
+        unique_numbers = list(set(phone_numbers_list))
+        self.phone_numbers = ",".join(unique_numbers)
+
+    def get_phone_numbers(self):
+        return self.phone_numbers.split(",")
+
+    def __str__(self):
+        return self.name

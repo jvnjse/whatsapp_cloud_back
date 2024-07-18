@@ -1,5 +1,5 @@
 from django.conf import settings
-import requests, json
+import requests, json, threading
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import get_object_or_404
@@ -27,6 +27,7 @@ from .serializers import (
     ScheduledAPISerializer,
     ContactFormSerializer,
     PlanPurchaseSerializer,
+    ContactGroupSerializer,
 )
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import (
@@ -38,6 +39,7 @@ from .models import (
     ContactForm,
     Notification,
     PlanPurchase,
+    ContactGroup,
 )
 
 # from openpyxl import load_workbook
@@ -52,6 +54,7 @@ from .functions.tasks import (
     send_message_to_facebook_excel_images,
 )
 import pandas as pd
+from datetime import datetime
 
 
 def read_file(file_path):
@@ -360,14 +363,19 @@ def upload_image(request):
     # image_file = request.FILES.get("image_file")
 
     # Step 1: Create a Session
-    print(uploaded_file)
+    uploaded_file.seek(0)
+
     url1 = f"https://graph.facebook.com/v19.0/{app_id}/uploads"
     headers1 = {"Content-Type": "application/x-www-form-urlencoded"}
     params1 = {
-        "file_length": "20000",
+        "file_length": file_length,  # Use the exact file length
         "file_type": file_type,
         "access_token": bearer_token,
     }
+
+    # Use files parameter for multipart form data
+    files = {"file":  uploaded_file}
+
     print(params1)
     response1 = requests.post(url1, headers=headers1, params=params1)
 
@@ -380,7 +388,7 @@ def upload_image(request):
 
     url2 = f"https://graph.facebook.com/v19.0/{upload_session_id}"
     headers2 = {"Authorization": f"OAuth {bearer_token}", "file_offset": "0"}
-    files2 = {"source": uploaded_file}
+    files2 = {"file": uploaded_file}
     response2 = requests.post(url2, headers=headers2, files=files2)
     print(response2.json())
     template = Template.objects.create(
@@ -569,7 +577,7 @@ def delete_template(request):
 
 
 def index(request):
-    return HttpResponse("OK")
+    return JsonResponse({"name": "OK"})
 
 
 class PhoneNumberList(APIView):
@@ -791,6 +799,8 @@ def excel_personalised_sent_message(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def excel_sent_message_images(request):
+    template_format = request.GET.get("template_format")
+
     try:
         serializer = ExcelImageSerializer(data=request.data)
 
@@ -808,8 +818,10 @@ def excel_sent_message_images(request):
             # workbook = load_workbook(excel_file, read_only=True)
             # worksheet = workbook.active
             # results = []
-            template_instance = get_object_or_404(Template, template_name=template_name)
-            image_link_get = f"{domain_url}{template_instance.template_image.url}"
+            # template_instance = get_object_or_404(Template, template_name=template_name)
+            # image_link_get = f"{domain_url}{template_instance.template_image.url}"
+            # image_link_get = "https://www.clickdimensions.com/links/TestPDFfile.pdf"
+
             # send_message_to_facebook_excel_images(excel)
 
             try:
@@ -820,7 +832,8 @@ def excel_sent_message_images(request):
                     user_id,
                     phone_number_id,
                     bearer_token,
-                    image_link_get,
+                    image_link,
+                    template_format,
                 )
             except Exception as e:
                 return HttpResponse(str(e), status=500)
@@ -1082,12 +1095,10 @@ def send_whatsapp_bulk_messages(request):
         return JsonResponse({"error": str(e)}, status=500)
 
 
-# image
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def send_whatsapp_bulk_messages_images(request):
     template_format = request.GET.get("template_format")
-    print("hiii", template_format)
     try:
         serializer = WhatsAppBulkMessageImageSerializer(data=request.data)
 
@@ -1098,82 +1109,92 @@ def send_whatsapp_bulk_messages_images(request):
             user_id = serializer.validated_data.get("user_id")
             get_credential = get_credentials(user_id)
             phone_number_id = get_credential[0]["phone_number_id"]
-            # business_id = get_credential[0]["whatsapp_business_id"]
             bearer_token = get_credential[0]["permanent_access_token"]
 
-            # #print(template_name)
             results = []
-            # template_instance = get_object_or_404(Template, template_name=template_name)
-            # image_link_get = f"{domain_url}{template_instance.template_image.url}"
+            threads = []
 
-        for number in numbers:
-            if number.startswith("0"):
-                number = "+91" + number[1:]
+            def process_number(number, results):
+                if number.startswith("0"):
+                    number = "+91" + number[1:]
 
-            if not number.startswith("+91"):
-                number = "+91" + number
+                if not number.startswith("+91"):
+                    number = "+91" + number
 
-            if not number:
-                results.append({"error": "Missing 'number' parameter"})
-                continue
-            PhoneNumber.objects.get_or_create(number=number, user_id=user_id)
+                if not number:
+                    results.append({"error": "Missing 'number' parameter"})
+                    return
 
-            data = {
-                "messaging_product": "whatsapp",
-                "recipient_type": "individual",
-                "to": number,
-                "type": "template",
-                "template": {
-                    "name": template_name,
-                    **(
-                        {
-                            "components": [
-                                {
-                                    "type": "header",
-                                    "parameters": [
-                                        {
-                                            "type": template_format,
-                                            template_format: {
-                                                "link": image_link,
-                                                **(
-                                                    {"filename": "filename.pdf"}
-                                                    if template_format == "document"
-                                                    else {}
-                                                ),
-                                            },
-                                        }
-                                    ],
-                                }
-                            ]
-                        }
-                        if template_format != "text"
-                        else {}
-                    ),
-                    "language": {"code": "en"},
-                },
-            }
-            print(data)
-            url = "https://graph.facebook.com/v18.0/" + phone_number_id + "/messages"
-            headers = {
-                "Authorization": "Bearer " + bearer_token,
-                "Content-Type": "application/json",
-            }
+                PhoneNumber.objects.get_or_create(number=number, user_id=user_id)
 
-            try:
-                response = requests.post(url, headers=headers, json=data)
-                response_data = response.json()
-                results.append(response_data)
-                print(results)
-            except requests.exceptions.RequestException as e:
-                results.append({"error": str(e)})
-            except json.JSONDecodeError:
-                results.append({"error": "Invalid JSON data"})
+                data = {
+                    "messaging_product": "whatsapp",
+                    "recipient_type": "individual",
+                    "to": number,
+                    "type": "template",
+                    "template": {
+                        "name": template_name,
+                        **(
+                            {
+                                "components": [
+                                    {
+                                        "type": "header",
+                                        "parameters": [
+                                            {
+                                                "type": template_format,
+                                                template_format: {
+                                                    "link": image_link,
+                                                    **(
+                                                        {"filename": "filename.pdf"}
+                                                        if template_format == "document"
+                                                        else {}
+                                                    ),
+                                                },
+                                            }
+                                        ],
+                                    }
+                                ]
+                            }
+                            if template_format != "text"
+                            else {}
+                        ),
+                        "language": {"code": "en"},
+                    },
+                }
 
-        for i, result in enumerate(results):
-            if not isinstance(result, dict):
-                results[i] = {"error": str(result)}
+                url = (
+                    "https://graph.facebook.com/v18.0/" + phone_number_id + "/messages"
+                )
+                headers = {
+                    "Authorization": "Bearer " + bearer_token,
+                    "Content-Type": "application/json",
+                }
 
-        return JsonResponse(results, status=200, safe=False)
+                try:
+                    response = requests.post(url, headers=headers, json=data)
+                    response_data = response.json()
+                    results.append(response_data)
+                except requests.exceptions.RequestException as e:
+                    results.append({"error": str(e)})
+                except json.JSONDecodeError:
+                    results.append({"error": "Invalid JSON data"})
+
+            for number in numbers:
+                thread = threading.Thread(target=process_number, args=(number, results))
+                threads.append(thread)
+                thread.start()
+
+            for thread in threads:
+                thread.join()
+
+            for i, result in enumerate(results):
+                if not isinstance(result, dict):
+                    results[i] = {"error": str(result)}
+
+            return JsonResponse(results, status=200, safe=False)
+
+        else:
+            return JsonResponse(serializer.errors, status=400)
 
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON data"}, status=400)
@@ -1327,13 +1348,59 @@ def send_whatsapp_model_bulk_messages_images(request):
         return JsonResponse({"error": str(e)}, status=500)
 
 
-# get templates
+# # get templates
+# @api_view(["GET"])
+# @permission_classes([IsAuthenticated])
+# def get_templates_message(request):
+#     user_id = request.GET.get("user_id")
+#     get_credential = get_credentials(user_id)
+#     # phone_number_id = get_credential[0]["phone_number_id"]
+#     business_id = get_credential[0]["whatsapp_business_id"]
+#     bearer_token = get_credential[0]["permanent_access_token"]
+#     template_instances = Template.objects.filter(user__id=user_id)
+
+#     template_image_array = []
+
+#     for template_instance in template_instances:
+#         template_dict = {
+#             template_instance.template_name: template_instance.template_image.url
+#         }
+#         template_image_array.append(template_dict)
+
+#     # print(template_image_array)
+
+#     url = "https://graph.facebook.com/v18.0/" + business_id + "/message_templates"
+#     headers = {
+#         "Authorization": "Bearer " + bearer_token,
+#     }
+#     # print(user_id)
+
+#     try:
+#         response = requests.get(url, headers=headers)
+#         data = response.json()
+#         templates = data.get("data", [])
+
+#         names = [template.get("name", "") for template in templates]
+#         components = [template.get("components", []) for template in templates]
+
+#         name_response = {
+#             "names": names,
+#             "components": components,
+#             "images": template_image_array,
+#         }
+
+#         # #print(data)
+#         return JsonResponse({"data": name_response})
+#         # return JsonResponse({"data": templates})
+#     except Exception as e:
+#         return JsonResponse({"error": str(e)}, status=500)
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def get_templates_message(request):
     user_id = request.GET.get("user_id")
     get_credential = get_credentials(user_id)
-    # phone_number_id = get_credential[0]["phone_number_id"]
     business_id = get_credential[0]["whatsapp_business_id"]
     bearer_token = get_credential[0]["permanent_access_token"]
     template_instances = Template.objects.filter(user__id=user_id)
@@ -1346,33 +1413,43 @@ def get_templates_message(request):
         }
         template_image_array.append(template_dict)
 
-    # print(template_image_array)
-
-    url = "https://graph.facebook.com/v18.0/" + business_id + "/message_templates"
+    url = f"https://graph.facebook.com/v18.0/{business_id}/message_templates"
     headers = {
         "Authorization": "Bearer " + bearer_token,
     }
-    # print(user_id)
 
-    try:
-        response = requests.get(url, headers=headers)
-        data = response.json()
-        templates = data.get("data", [])
+    # Define a function to fetch template data
+    def fetch_template_data():
+        nonlocal templates
+        try:
+            response = requests.get(url, headers=headers)
+            data = response.json()
+            templates = data.get("data", [])
+        except Exception as e:
+            templates = {"error": str(e)}
 
-        names = [template.get("name", "") for template in templates]
-        components = [template.get("components", []) for template in templates]
+    templates = []
+    # Create and start the thread for fetching template data
+    fetch_thread = threading.Thread(target=fetch_template_data)
+    fetch_thread.start()
 
-        name_response = {
-            "names": names,
-            "components": components,
-            "images": template_image_array,
-        }
+    # Wait for the fetch thread to complete
+    fetch_thread.join()
 
-        # #print(data)
-        return JsonResponse({"data": name_response})
-        # return JsonResponse({"data": templates})
-    except Exception as e:
-        return JsonResponse({"error": str(e)}, status=500)
+    # Process the templates data
+    if isinstance(templates, dict) and "error" in templates:
+        return JsonResponse({"error": templates["error"]}, status=500)
+
+    names = [template.get("name", "") for template in templates]
+    components = [template.get("components", []) for template in templates]
+
+    name_response = {
+        "names": names,
+        "components": components,
+        "images": template_image_array,
+    }
+
+    return JsonResponse({"data": name_response})
 
 
 @api_view(["GET"])
@@ -1402,6 +1479,95 @@ def get_templates_list(request):
         # #print(data)
         return JsonResponse({"data": templates})
         # return JsonResponse({"data": name_response})
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+import time
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_templates_analytics(request):
+    user_id = request.GET.get("user_id")
+    template_id = request.GET.get("template_id")
+    start_date = request.GET.get("start_date")
+    end_date = request.GET.get("end_date")
+
+    # Validate start_date and end_date
+    if not start_date or not end_date:
+        return JsonResponse(
+            {"error": "start_date and end_date are required"}, status=400
+        )
+
+    try:
+        # Convert start_date and end_date to Unix timestamps
+        start_timestamp = int(
+            time.mktime(datetime.strptime(start_date, "%Y-%m-%d").timetuple())
+        )
+        end_timestamp = int(
+            time.mktime(datetime.strptime(end_date, "%Y-%m-%d").timetuple())
+        )
+        print(start_timestamp)
+        print(end_timestamp)
+    except ValueError:
+        return JsonResponse(
+            {"error": "Invalid date format. Use YYYY-MM-DD."}, status=400
+        )
+
+    get_credential = get_credentials(user_id)
+    # if not get_credential:
+    #     return JsonResponse({"error": "Invalid user credentials"}, status=400)
+
+    business_id = get_credential[0]["whatsapp_business_id"]
+    bearer_token = get_credential[0]["permanent_access_token"]
+
+    url = (
+        f"https://graph.facebook.com/v20.0/{business_id}/template_analytics"
+        f"?start={start_timestamp}&end={end_timestamp}"
+        f"&granularity=DAILY&metric_types=['SENT','DELIVERED','READ','CLICKED']"
+        f"&template_ids=[{template_id}]"
+    )
+    headers = {
+        "Authorization": f"Bearer {bearer_token}",
+    }
+
+    # try:
+    #     response = requests.get(url, headers=headers)
+    #     data = response.json()
+
+    #     if "error" in data:
+    #         return JsonResponse(
+    #             {"error": data["error"]["message"]}, status=response.status_code
+    #         )
+
+    #     return JsonResponse({"data": data.get("data", [])})
+    try:
+        response = requests.get(url, headers=headers)
+        data = response.json()
+
+        if "error" in data:
+            return JsonResponse(
+                {"error": data["error"]["message"]}, status=response.status_code
+            )
+
+        total_sent = 0
+        total_delivered = 0
+        total_read = 0
+
+        for item in data.get("data", []):
+            for data_point in item.get("data_points", []):
+                total_sent += data_point.get("sent", 0)
+                total_delivered += data_point.get("delivered", 0)
+                total_read += data_point.get("read", 0)
+
+        summary = {
+            "total_sent": total_sent,
+            "total_delivered": total_delivered,
+            "total_read": total_read,
+        }
+
+        return JsonResponse(summary)
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
 
@@ -2453,11 +2619,21 @@ class ContactFormView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+import httpx
+from asgiref.sync import async_to_sync, sync_to_async
+
+
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def check_validation(request):
+    return async_to_sync(check_validation_async)(request)
+
+
+async def check_validation_async(request):
     user_id = request.GET.get("user_id")
-    get_credential = get_credentials(user_id)
+    get_credential_async = sync_to_async(get_credentials, thread_sensitive=True)
+    get_credential = await get_credential_async(user_id)
+
     if get_credential is not None:
         phone_number_id = get_credential[0]["phone_number_id"]
         business_id = get_credential[0]["whatsapp_business_id"]
@@ -2465,34 +2641,35 @@ def check_validation(request):
         app_id = get_credential[0]["app_id"]
 
         facebook_api_url = (
-            "https://graph.facebook.com/v18.0/" + business_id + "/message_templates"
+            f"https://graph.facebook.com/v18.0/{business_id}/message_templates"
         )
-
         headers = {
             "Content-Type": "application/json",
-            "Authorization": "Bearer " + bearer_token,
+            "Authorization": f"Bearer {bearer_token}",
         }
 
-        response = requests.get(facebook_api_url, headers=headers)
-        response_data = response.json()
+        async with httpx.AsyncClient() as client:
+            response = await client.get(facebook_api_url, headers=headers)
+            response_data = response.json()
+            print(response_data)
 
-        if response.status_code == status.HTTP_200_OK:
-            return Response(
-                {"message": response_data, "access": "added"},
-                status=status.HTTP_200_OK,
-            )
-        else:
-            return Response(
-                {
-                    "message": {
-                        "phone_number_id": phone_number_id,
-                        "business_id": business_id,
-                        "app_id": app_id,
+            if response.status_code == status.HTTP_200_OK:
+                return Response(
+                    {"message": response_data, "access": "added"},
+                    status=status.HTTP_200_OK,
+                )
+            else:
+                return Response(
+                    {
+                        "message": {
+                            "phone_number_id": phone_number_id,
+                            "business_id": business_id,
+                            "app_id": app_id,
+                        },
+                        "access": "added-not-valid",
                     },
-                    "access": "added-not-valid",
-                },
-                status=response.status_code,
-            )
+                    status=response.status_code,
+                )
     else:
         return Response({"access": "not-added"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -2611,3 +2788,55 @@ class PlanPurchaseDetail(APIView):
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+from .models import Blog
+from .serializers import BlogSerializer
+
+
+class BlogListCreateAPIView(generics.ListCreateAPIView):
+    queryset = Blog.objects.all()
+    serializer_class = BlogSerializer
+
+    def get_permissions(self):
+        if self.request.method == "POST":
+            return [permissions.IsAdminUser()]
+        return []
+
+
+@api_view(["GET"])
+def bloglist_published(request):
+    queryset = Blog.objects.filter(published=True)
+
+    serializer = BlogSerializer(queryset, many=True)
+    return Response(serializer.data)
+
+
+class BlogRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Blog.objects.all()
+    serializer_class = BlogSerializer
+
+    def get_permissions(self):
+        if self.request.method == "POST":
+            return [permissions.IsAdminUser()]
+        return []
+
+
+from django.shortcuts import render
+
+
+def custom_404(request, exception):
+    return render(request, "404.html", status=404)
+
+
+from rest_framework import viewsets
+
+
+class ContactGroupViewSet(generics.ListCreateAPIView):
+    queryset = ContactGroup.objects.all()
+    serializer_class = ContactGroupSerializer
+
+
+class ContactGroupUpdateView(generics.UpdateAPIView):
+    queryset = ContactGroup.objects.all()
+    serializer_class = ContactGroupSerializer

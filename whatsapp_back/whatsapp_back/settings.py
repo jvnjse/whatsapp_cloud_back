@@ -28,7 +28,7 @@ SECRET_KEY = "django-insecure-ynr1znbi4l^2(zes)$$rl@*t4bl_0!z2&6(qflc1p43pkux8zo
 DEBUG = True
 
 # ALLOWED_HOSTS = ["altosconnectweb.com", "altosconnectweb"]
-ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
+ALLOWED_HOSTS = ["127.0.0.1", "localhost", "summary-deer-centrally.ngrok-free.app"]
 
 
 # Application definition
@@ -170,8 +170,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=25),
-    "REFRESH_TOKEN_LIFETIME": timedelta(minutes=25),
+    "ACCESS_TOKEN_LIFETIME": timedelta(days=1),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
     "AUTH_HEADER_TYPES": ("Bearer",),
     "AUTH_HEADER_NAME": "HTTP_AUTHORIZATION",
     "USER_ID_FIELD": "id",

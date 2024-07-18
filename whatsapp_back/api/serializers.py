@@ -1,5 +1,12 @@
 from rest_framework import serializers
-from .models import PhoneNumber, CustomUser, Template, ContactForm, PlanPurchase
+from .models import (
+    PhoneNumber,
+    CustomUser,
+    Template,
+    ContactForm,
+    PlanPurchase,
+    ContactGroup,
+)
 import random
 import string
 from .functions.tasks import send_email
@@ -236,3 +243,39 @@ class PlanPurchaseSerializer(serializers.ModelSerializer):
             "started_date",
             "image",
         ]
+
+
+from .models import Blog
+
+
+class BlogSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Blog
+        fields = ["id", "link", "blog_content", "published"]
+
+
+class ContactGroupSerializer(serializers.ModelSerializer):
+    phone_numbers = serializers.ListField(child=serializers.CharField())
+
+    class Meta:
+        model = ContactGroup
+        fields = ["id", "name", "phone_numbers"]
+
+    def create(self, validated_data):
+        phone_numbers = validated_data.pop("phone_numbers")
+        contact_group = ContactGroup.objects.create(**validated_data)
+        contact_group.set_phone_numbers(phone_numbers)
+        contact_group.save()
+        return contact_group
+
+    def update(self, instance, validated_data):
+        phone_numbers = validated_data.pop("phone_numbers")
+        instance.name = validated_data.get("name", instance.name)
+        instance.set_phone_numbers(phone_numbers)
+        instance.save()
+        return instance
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        representation["phone_numbers"] = instance.get_phone_numbers()
+        return representation
